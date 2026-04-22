@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>UhaMap</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -18,11 +18,25 @@ body { margin:0; font-family:Arial; }
   bottom:0;
   left:0;
   right:0;
-  background:white;
+  background:#fff;
   padding:12px;
+  border-radius:15px 15px 0 0;
   display:none;
+  z-index:9999;
+  max-height:70vh;
+  overflow:auto;
 }
 
+.row { margin-bottom:10px; }
+select, textarea, input {
+  width:100%;
+  padding:10px;
+}
+button {
+  width:100%;
+  padding:12px;
+  margin-top:5px;
+}
 .admin {
   position:fixed;
   right:0;
@@ -32,6 +46,7 @@ body { margin:0; font-family:Arial; }
   background:#fff;
   overflow:auto;
   display:none;
+  z-index:9999;
 }
 </style>
 </head>
@@ -39,7 +54,35 @@ body { margin:0; font-family:Arial; }
 <body>
 
 <div id="map"></div>
-<div class="panel" id="panel"></div>
+
+<div class="panel" id="panel">
+
+  <h3>Новая точка</h3>
+
+  <div id="coords"></div>
+
+  <div class="row">
+    <select id="category"></select>
+  </div>
+
+  <div class="row">
+    <select id="access">
+      <option>легковой</option>
+      <option>внедорожник</option>
+      <option>пешком</option>
+      <option>лодка</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <textarea id="desc" placeholder="описание"></textarea>
+  </div>
+
+  <button onclick="save()">Сохранить</button>
+  <button onclick="closePanel()">Закрыть</button>
+
+</div>
+
 <div class="admin" id="admin"></div>
 
 <script>
@@ -47,102 +90,167 @@ body { margin:0; font-family:Arial; }
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-const API = "PUT_API_URL";
+const API = "YOUR_API_URL";
 
 let map;
 let current;
 
-// ================= FULL CATEGORY ICONS =================
-function getIcon(cat) {
+// ================= ПОЛНЫЙ СПИСОК КАТЕГОРИЙ =================
+const categories = [
+  "рыбалка",
+  "платная рыбалка",
+  "кемпинг",
+  "лагерь",
+  "палатка",
+  "база отдыха",
 
-  const icons = {
-    "рыбалка": "🎣",
-    "платная рыбалка": "💰🎣",
-    "кемпинг": "⛺",
-    "лагерь": "🏕️",
-    "палатка": "⛺",
-    "база отдыха": "🏡",
+  "пляж",
+  "платный пляж",
+  "место для купания",
+  "спуск катера",
+  "пирс",
 
-    "пляж": "🏖️",
-    "платный пляж": "💰🏖️",
-    "купание": "🌊",
-    "спуск катера": "🚤",
-    "пирс": "🌉",
+  "опасный участок дороги",
+  "зимний проезд",
 
-    "опасно": "⚠️",
-    "зимний проезд": "❄️",
+  "родник",
+  "колодец",
+  "арт-объект",
+  "достопримечательность",
+  "загадочное место",
+  "дикое место",
 
-    "родник": "💧",
-    "колодец": "🪣",
-    "арт-объект": "🎨",
-    "достопримечательность": "🏛️",
-    "загадочное место": "❓",
-    "дикое место": "🌲",
+  "пожарная часть",
+  "медпомощь",
+  "туалет",
+  "мусорный бак"
+];
 
-    "пожарная часть": "🚒",
-    "медпомощь": "🏥",
-    "туалет": "🚻",
-    "мусор": "🗑️"
+// ================= ИКОНКИ =================
+function icon(cat) {
+
+  const mapIcon = {
+    "рыбалка":"🎣",
+    "платная рыбалка":"💰🎣",
+    "кемпинг":"⛺",
+    "лагерь":"🏕️",
+    "палатка":"⛺",
+    "база отдыха":"🏡",
+
+    "пляж":"🏖️",
+    "платный пляж":"💰🏖️",
+    "место для купания":"🌊",
+    "спуск катера":"🚤",
+    "пирс":"🌉",
+
+    "опасный участок дороги":"⚠️",
+    "зимний проезд":"❄️",
+
+    "родник":"💧",
+    "колодец":"🪣",
+    "арт-объект":"🎨",
+    "достопримечательность":"🏛️",
+    "загадочное место":"❓",
+    "дикое место":"🌲",
+
+    "пожарная часть":"🚒",
+    "медпомощь":"🏥",
+    "туалет":"🚻",
+    "мусорный бак":"🗑️"
   };
 
   return L.divIcon({
-    html: `<div style="font-size:20px">${icons[cat] || "📍"}</div>`,
-    className: ""
+    html:`<div style="font-size:20px">${mapIcon[cat] || "📍"}</div>`,
+    className:""
   });
 }
 
 // ================= INIT =================
 function init() {
 
-  map = L.map('map').setView([55, 37], 10);
+  map = L.map('map').setView([55,37],10);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+  const sat = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+  );
+
+  L.control.layers({
+    "OSM": osm,
+    "Satellite": sat
+  }).addTo(map);
 
   map.on("click", e => {
     current = e.latlng;
-    openForm();
+    openPanel();
   });
 
+  fillCategories();
   loadPoints();
   loadAdmin();
 }
 
-// ================= LOAD POINTS =================
+// ================= CATEGORY UI =================
+function fillCategories() {
+  const sel = document.getElementById("category");
+  categories.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c;
+    opt.innerText = c;
+    sel.appendChild(opt);
+  });
+}
+
+// ================= POINTS =================
 async function loadPoints() {
 
   const res = await fetch(API + "?action=getPoints");
   const data = await res.json();
 
   data.forEach(p => {
-    L.marker([p.lat, p.lng], { icon: getIcon(p.category) })
+    L.marker([p.lat, p.lng], { icon: icon(p.category) })
       .addTo(map)
       .bindPopup(p.category);
   });
 }
 
 // ================= SAVE =================
-async function save(category, desc) {
+async function save() {
 
   await fetch(API, {
-    method: "POST",
-    body: JSON.stringify({
-      action: "savePoint",
-      data: {
+    method:"POST",
+    body:JSON.stringify({
+      action:"savePoint",
+      data:{
         lat: current.lat,
         lng: current.lng,
-        category,
-        description: desc,
+        category: document.getElementById("category").value,
+        access: document.getElementById("access").value,
+        description: document.getElementById("desc").value,
         user_id: tg.initDataUnsafe?.user?.id,
         user_name: tg.initDataUnsafe?.user?.first_name
       }
     })
   });
 
-  alert("Отправлено");
+  closePanel();
+  alert("Отправлено на модерацию");
+}
+
+// ================= PANEL =================
+function openPanel(){
+  document.getElementById("panel").style.display="block";
+  document.getElementById("coords").innerText =
+    current.lat.toFixed(5)+", "+current.lng.toFixed(5);
+}
+
+function closePanel(){
+  document.getElementById("panel").style.display="none";
 }
 
 // ================= ADMIN =================
-async function loadAdmin() {
+async function loadAdmin(){
 
   const res = await fetch(API + "?action=getPending");
   const data = await res.json();
@@ -155,7 +263,6 @@ async function loadAdmin() {
   data.forEach(p => {
 
     const div = document.createElement("div");
-
     div.innerHTML = `
       <b>${p.category}</b><br>
       ${p.user}<br>
@@ -166,16 +273,15 @@ async function loadAdmin() {
   });
 }
 
-function approve(id) {
-  fetch(API, {
-    method: "POST",
-    body: JSON.stringify({ action: "approve", id })
+function approve(id){
+  fetch(API,{
+    method:"POST",
+    body:JSON.stringify({action:"approve",id})
   });
 }
 
 init();
 
 </script>
-
 </body>
 </html>
