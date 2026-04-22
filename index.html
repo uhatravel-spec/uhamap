@@ -3,54 +3,70 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-
 <title>UhaMap</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{height:100vh;display:flex;flex-direction:column;font-family:Arial}
-#map{flex:1}
+* { margin:0; padding:0; box-sizing:border-box; }
 
-.panel{
- position:fixed;
- bottom:0;
- width:100%;
- background:#fff;
- padding:12px;
- border-radius:16px 16px 0 0;
- display:none;
+body {
+    font-family: -apple-system, BlinkMacSystemFont, Arial;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
-select,textarea{
-width:100%;
-padding:10px;
-margin-bottom:8px;
-border-radius:10px
+#map {
+    flex: 1;
+    width: 100%;
+    z-index: 1;
 }
 
-button{
-width:100%;
-padding:12px;
-border:none;
-border-radius:20px;
-background:#2a9d8f;
-color:#fff
+/* 🔥 ВАЖНО: панель теперь НАД картой */
+.point-form {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+
+    background: white;
+    padding: 16px;
+    border-radius: 18px 18px 0 0;
+
+    box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
+
+    z-index: 9999;
+
+    max-height: 70vh;
+    overflow-y: auto;
 }
 
-.loading{
-position:fixed;
-bottom:20px;
-left:50%;
-transform:translateX(-50%);
-background:#000;
-color:#fff;
-padding:6px 14px;
-border-radius:20px;
-display:none
+.hidden { display:none; }
+
+.loading {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8);
+    color:#fff;
+    padding:8px 16px;
+    border-radius:20px;
+    display:none;
+    z-index: 9999;
+}
+
+button {
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:20px;
+    background:#2a9d8f;
+    color:#fff;
+    font-weight:bold;
 }
 </style>
 </head>
@@ -60,14 +76,23 @@ display:none
 <div id="map"></div>
 <div class="loading" id="loading">Загрузка...</div>
 
-<div class="panel" id="panel">
-    <h3>📍 Новая точка</h3>
+<!-- 📍 ПАНЕЛЬ -->
+<div id="panel" class="point-form hidden">
+    <h3>📍 Добавить точку</h3>
 
-    <select id="category"></select>
+    <select id="category">
+        <option value="рыбалка">Рыбалка</option>
+        <option value="платная рыбалка">Платная рыбалка</option>
+        <option value="кемпинг">Кемпинг</option>
+        <option value="пляж">Пляж</option>
+        <option value="опасно">Опасно</option>
+        <option value="родник">Родник</option>
+    </select>
+
     <textarea id="desc" placeholder="Описание"></textarea>
 
     <button onclick="savePoint()">Сохранить</button>
-    <button onclick="closePanel()" style="background:#ccc;margin-top:6px">Отмена</button>
+    <button onclick="closePanel()" style="margin-top:10px;background:#ccc;">Отмена</button>
 </div>
 
 <script>
@@ -79,135 +104,123 @@ const API = "https://script.google.com/macros/s/AKfycbwlOgngZosEiq_7uHYbicL5EtwC
 
 let map;
 let current = null;
-
-// ================= КАТЕГОРИИ =================
-const categories = [
-"рыбалка","платная рыбалка","мосток","платный мосток",
-"агроусадьба","загадочное место","артобъект",
-"опасная дорога","пляж","платный пляж",
-"купание","спуск катера",
-"кемпинг","лагерь","палатка",
-"пожарная","медпомощь",
-"беседка","платная беседка",
-"достопримечательность",
-"парковка","платная парковка",
-"пирс","санаторий",
-"родник","колодец",
-"мусор","туалет",
-"база отдыха","кострище","дикое место",
-"зимний проезд","остров (2WD/4x4/пешком)"
-];
-
-// ================= ИКОНКИ =================
-const iconMap = {
- "рыбалка":"🎣",
- "платная рыбалка":"💰🎣",
- "пляж":"🏖️",
- "платный пляж":"💰🏖️",
- "кемпинг":"⛺",
- "палатка":"🏕️",
- "опасная дорога":"⚠️",
- "родник":"💧",
- "парковка":"🅿️",
- "пирс":"🌉",
- "беседка":"🪑",
- "медпомощь":"🚑",
- "пожарная":"🚒"
-};
+let waterLayer = null;
 
 // ================= СЛОИ =================
 const osm = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png');
-const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
-const labels = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png');
-const hybrid = L.layerGroup([sat,labels]);
 
-function initMap(){
+const satellite = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+);
 
-map = L.map('map',{center:[55.75,37.61],zoom:11,layers:[osm]});
+const labels = L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png'
+);
 
-L.control.layers({
-"Карта":osm,
-"Спутник":sat,
-"Гибрид":hybrid
-}).addTo(map);
+const hybrid = L.layerGroup([satellite, labels]);
 
-map.on('click',e=>{
-current=e.latlng;
-openPanel();
-});
+// ================= MAP =================
+function initMap() {
 
-loadPoints();
-fillSelect();
+    map = L.map('map', {
+        center: [55.75, 37.61],
+        zoom: 11,
+        layers: [osm]
+    });
+
+    const base = {
+        "Карта": osm,
+        "Спутник": satellite,
+        "Гибрид": hybrid
+    };
+
+    L.control.layers(base).addTo(map);
+
+    // 🔥 запоминание слоя
+    const saved = localStorage.getItem("uhamap_layer");
+
+    if (saved === "sat") satellite.addTo(map);
+    else if (saved === "hybrid") hybrid.addTo(map);
+    else osm.addTo(map);
+
+    map.on('baselayerchange', (e) => {
+        if (e.name === "Спутник") localStorage.setItem("uhamap_layer", "sat");
+        if (e.name === "Гибрид") localStorage.setItem("uhamap_layer", "hybrid");
+        if (e.name === "Карта") localStorage.setItem("uhamap_layer", "osm");
+    });
+
+    // 📍 клик по карте
+    map.on('click', (e) => {
+        current = e.latlng;
+        openPanel();
+    });
+
+    loadWaterBodies();
 }
 
-// ================= SELECT =================
-function fillSelect(){
-let s=document.getElementById("category");
-categories.forEach(c=>{
-let o=document.createElement("option");
-o.value=c;
-o.text=c;
-s.appendChild(o);
-});
+// ================= ВОДОЁМЫ =================
+async function loadWaterBodies() {
+    try {
+        const res = await fetch(API + "?action=getWaterBodies");
+        const data = await res.json();
+
+        waterLayer = L.geoJSON(data, {
+            style: (f) => ({
+                color: f.properties?.color || "#2a9d8f",
+                weight: f.properties?.weight || 3,
+                opacity: 0.7,
+                fillOpacity: 0.1
+            }),
+            onEachFeature: (f, layer) => {
+                layer.bindPopup("🌊 " + (f.properties?.name || "Водоём"));
+            }
+        }).addTo(map);
+
+    } catch (e) {
+        console.log("water error", e);
+    }
 }
 
-// ================= LOAD =================
-async function loadPoints(){
-
-const res=await fetch(API+"?action=getPoints");
-const data=await res.json();
-
-data.forEach(p=>{
-const icon = iconMap[p.category] || "📍";
-
-L.marker([p.lat,p.lng])
-.addTo(map)
-.bindPopup(`
-${icon} <b>${p.category}</b><br>
-📝 ${p.description || ""}
-`);
-});
+// ================= UI =================
+function openPanel() {
+    document.getElementById("panel").classList.remove("hidden");
 }
 
-// ================= PANEL =================
-function openPanel(){
-document.getElementById("panel").style.display="block";
+function closePanel() {
+    document.getElementById("panel").classList.add("hidden");
+    current = null;
 }
 
-function closePanel(){
-document.getElementById("panel").style.display="none";
-current=null;
+// ================= SAVE POINT =================
+async function savePoint() {
+
+    if (!current) return;
+
+    const data = {
+        lat: current.lat,
+        lng: current.lng,
+        category: document.getElementById("category").value,
+        description: document.getElementById("desc").value
+    };
+
+    document.getElementById("loading").style.display = "block";
+
+    await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({
+            action: "savePoint",
+            data
+        })
+    });
+
+    L.marker([data.lat, data.lng]).addTo(map);
+
+    document.getElementById("loading").style.display = "none";
+    closePanel();
 }
 
-// ================= SAVE =================
-async function savePoint(){
-
-if(!current)return;
-
-const data={
-lat:current.lat,
-lng:current.lng,
-category:document.getElementById("category").value,
-description:document.getElementById("desc").value,
-user_id:tg.initDataUnsafe?.user?.id
-};
-
-document.getElementById("loading").style.display="block";
-
-await fetch(API,{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({action:"savePoint",data})
-});
-
-L.marker([data.lat,data.lng])
-.addTo(map)
-.bindPopup(iconMap[data.category]||"📍");
-
-document.getElementById("loading").style.display="none";
-closePanel();
-}
-
+// ================= START =================
 initMap();
 
 </script>
