@@ -21,30 +21,30 @@ body { margin:0; font-family:Arial; }
   background:#fff;
   padding:12px;
   border-radius:15px 15px 0 0;
-  z-index:9999;
   display:none;
+  z-index:9999;
   max-height:70vh;
   overflow:auto;
 }
 
-.row { margin-bottom:10px; }
+.menu {
+  position:fixed;
+  top:10px;
+  left:10px;
+  background:#fff;
+  padding:10px;
+  border-radius:10px;
+  z-index:9999;
+}
 
-select, textarea {
-  width:100%;
+.row { margin-bottom:10px; }
+select, textarea, input { width:100%; padding:10px; }
+button { width:100%; padding:12px; margin-top:5px; }
+
+.point-item {
+  border-bottom:1px solid #eee;
   padding:10px;
 }
-
-button {
-  width:100%;
-  padding:12px;
-  margin-top:6px;
-  border:none;
-  border-radius:10px;
-}
-
-.save { background:#ccc; }
-.publish { background:#2a9d8f; color:#fff; }
-
 </style>
 </head>
 
@@ -52,10 +52,12 @@ button {
 
 <div id="map"></div>
 
+<div class="menu">
+  <button onclick="openMyPoints()">📂 Мои точки</button>
+</div>
+
 <div class="panel" id="panel">
-
   <h3>Новая точка</h3>
-
   <div id="coords"></div>
 
   <div class="row">
@@ -64,19 +66,10 @@ button {
 
   <div class="row">
     <select id="access">
-      <option value="легковой">🚗 Легковой</option>
-      <option value="внедорожник">🚙 Внедорожник</option>
-      <option value="пешком">🚶 Пешком</option>
-      <option value="лодка">🚤 Лодка</option>
-    </select>
-  </div>
-
-  <div class="row">
-    <select id="connection">
-      <option value="нет">📴 Нет связи</option>
-      <option value="слабая">📶 Слабая</option>
-      <option value="стабильная">📡 Стабильная</option>
-      <option value="4g">📶 4G/5G</option>
+      <option>легковой</option>
+      <option>внедорожник</option>
+      <option>пешком</option>
+      <option>лодка</option>
     </select>
   </div>
 
@@ -84,10 +77,12 @@ button {
     <textarea id="desc" placeholder="описание"></textarea>
   </div>
 
-  <button class="save" onclick="saveDraft()">💾 Сохранить</button>
-  <button class="publish" onclick="publish()">🚀 Опубликовать</button>
-
+  <button onclick="saveDraft()">Сохранить</button>
+  <button onclick="publishPoint()">Опубликовать</button>
+  <button onclick="closePanel()">Закрыть</button>
 </div>
+
+<div class="panel" id="myPointsPanel"></div>
 
 <script>
 
@@ -97,171 +92,206 @@ tg.expand();
 const API = "YOUR_API_URL";
 
 let map;
-let current = null;
-let marker = null;
-let draft = null;
+let current;
+let tempMarker;
 
-// ================= ПОЛНЫЙ СПИСОК =================
+// ================= КАТЕГОРИИ =================
 const categories = [
-  "рыбалка","платная рыбалка",
-  "кемпинг","лагерь","палатка","база отдыха",
-  "пляж","платный пляж","место для купания","спуск катера","пирс",
-  "опасный участок дороги","зимний проезд",
-  "родник","колодец","арт-объект","достопримечательность","загадочное место","дикое место",
-  "пожарная часть","медпомощь","туалет","мусорный бак"
+"рыбалка","платная рыбалка","кемпинг","лагерь","палатка","база отдыха",
+"пляж","платный пляж","место для купания","спуск катера","пирс",
+"опасный участок дороги","зимний проезд",
+"родник","колодец","арт-объект","достопримечательность","загадочное место","дикое место",
+"пожарная часть","медпомощь","туалет","мусорный бак"
 ];
 
 // ================= ИКОНКИ =================
-const icons = {
-  "рыбалка":"🎣","платная рыбалка":"💰🎣",
-  "кемпинг":"⛺","лагерь":"🏕️","палатка":"⛺","база отдыха":"🏡",
-  "пляж":"🏖️","платный пляж":"💰🏖️","место для купания":"🏊","спуск катера":"🚤","пирс":"🌉",
-  "опасный участок дороги":"⚠️","зимний проезд":"❄️⚠️",
-  "родник":"💧","колодец":"🪣","арт-объект":"🎨","достопримечательность":"📍","загадочное место":"🧭","дикое место":"🌲",
-  "пожарная часть":"🚒","медпомощь":"🏥","туалет":"🚻","мусорный бак":"🗑️"
-};
+function icon(cat){
+  const icons = {
+    "рыбалка":"🎣","платная рыбалка":"💰🎣","кемпинг":"⛺","лагерь":"🏕️",
+    "палатка":"⛺","база отдыха":"🏡","пляж":"🏖️","платный пляж":"💰🏖️",
+    "место для купания":"🌊","спуск катера":"🚤","пирс":"🌉",
+    "опасный участок дороги":"⚠️","зимний проезд":"❄️",
+    "родник":"💧","колодец":"🪣","арт-объект":"🎨","достопримечательность":"🏛️",
+    "загадочное место":"❓","дикое место":"🌲",
+    "пожарная часть":"🚒","медпомощь":"🏥","туалет":"🚻","мусорный бак":"🗑️"
+  };
 
-function makeIcon(cat){
   return L.divIcon({
-    html:`<div style="font-size:22px">${icons[cat] || "📍"}</div>`,
-    className:""
+    html:`<div style="font-size:20px">${icons[cat] || "📍"}</div>`
   });
 }
 
 // ================= INIT =================
 function init(){
-
   map = L.map('map').setView([55,37],10);
 
   const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+  const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
 
-  const sat = L.tileLayer(
-    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-  );
+  L.control.layers({ "Карта":osm,"Спутник":sat }).addTo(map);
 
-  L.control.layers({
-    "Карта": osm,
-    "Спутник": sat
-  }).addTo(map);
-
-  map.on("click", e => {
-
+  map.on("click", e=>{
     current = e.latlng;
 
-    if(marker) map.removeLayer(marker);
+    if(tempMarker) map.removeLayer(tempMarker);
 
-    marker = L.marker(current, {
-      draggable:true,
-      icon: makeIcon("рыбалка")
-    }).addTo(map);
+    tempMarker = L.marker(current).addTo(map);
 
-    marker.on("dragend", () => {
-      current = marker.getLatLng();
-      updateCoords();
-    });
-
-    updateCoords();
     openPanel();
   });
 
-  document.getElementById("category").onchange = (e)=>{
-    if(marker){
-      marker.setIcon(makeIcon(e.target.value));
-    }
-  };
-
   fillCategories();
   loadPoints();
+  loadLocalPoints();
 }
 
 // ================= CATEGORY =================
 function fillCategories(){
   const sel = document.getElementById("category");
-
   categories.forEach(c=>{
-    const opt=document.createElement("option");
-    opt.value=c;
-    opt.innerText=c;
-    sel.appendChild(opt);
+    const o = document.createElement("option");
+    o.value = c;
+    o.innerText = c;
+    sel.appendChild(o);
   });
 }
 
-// ================= UI =================
-function updateCoords(){
-  document.getElementById("coords").innerText =
-    current.lat.toFixed(5)+", "+current.lng.toFixed(5);
+// ================= LOCAL STORAGE =================
+function getLocal(){
+  return JSON.parse(localStorage.getItem("points") || "[]");
 }
 
-function openPanel(){
-  document.getElementById("panel").style.display="block";
+function saveLocal(points){
+  localStorage.setItem("points", JSON.stringify(points));
 }
 
-function closePanel(){
-  document.getElementById("panel").style.display="none";
-  if(marker){
-    map.removeLayer(marker);
-    marker=null;
-  }
-}
-
-// ================= DRAFT =================
+// ================= SAVE DRAFT =================
 function saveDraft(){
 
-  draft = {
+  const points = getLocal();
+
+  const p = {
+    id: Date.now(),
     lat: current.lat,
     lng: current.lng,
-    category: category.value,
-    access: access.value,
-    connection: connection.value,
-    description: desc.value
+    category: document.getElementById("category").value,
+    description: document.getElementById("desc").value,
+    status: "draft",
+    visible: true
   };
 
-  alert("💾 Сохранено локально");
+  points.push(p);
+  saveLocal(points);
+
+  drawPoint(p);
+
+  closePanel();
 }
 
 // ================= PUBLISH =================
-async function publish(){
+async function publishPoint(){
+
+  const data = {
+    lat: current.lat,
+    lng: current.lng,
+    category: document.getElementById("category").value,
+    description: document.getElementById("desc").value,
+    user_id: tg.initDataUnsafe?.user?.id,
+    user_name: tg.initDataUnsafe?.user?.first_name
+  };
 
   await fetch(API,{
     method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({
-      action:"savePoint",
-      data:{
-        lat: current.lat,
-        lng: current.lng,
-        category: category.value,
-        access: access.value,
-        connection: connection.value,
-        description: desc.value,
-        user_id: tg.initDataUnsafe?.user?.id,
-        user_name: tg.initDataUnsafe?.user?.first_name
-      }
-    })
+    body:JSON.stringify({action:"savePoint",data})
   });
 
-  alert("🚀 Отправлено на модерацию");
-
+  alert("Отправлено на модерацию");
   closePanel();
-  loadPoints();
 }
 
-// ================= LOAD =================
+// ================= LOAD SERVER =================
 async function loadPoints(){
-
-  const res = await fetch(API + "?action=getPoints");
+  const res = await fetch(API+"?action=getPoints");
   const data = await res.json();
 
   data.forEach(p=>{
     if(p.status !== "approved") return;
 
-    L.marker([p.lat,p.lng],{
-      icon: makeIcon(p.category)
-    }).addTo(map)
-    .bindPopup(`${icons[p.category] || ""} ${p.category}<br>${p.description || ""}`);
+    L.marker([p.lat,p.lng],{icon:icon(p.category)})
+      .addTo(map)
+      .bindPopup(p.category);
   });
 }
 
+// ================= LOCAL POINTS =================
+function loadLocalPoints(){
+  const points = getLocal();
+  points.forEach(drawPoint);
+}
+
+function drawPoint(p){
+
+  if(!p.visible) return;
+
+  L.marker([p.lat,p.lng],{icon:icon(p.category)})
+    .addTo(map)
+    .bindPopup(`${p.category}<br>${p.description}<br>(${p.status})`);
+}
+
+// ================= MY POINTS UI =================
+function openMyPoints(){
+
+  const panel = document.getElementById("myPointsPanel");
+  panel.style.display="block";
+
+  const points = getLocal();
+
+  panel.innerHTML = "<h3>Мои точки</h3>";
+
+  points.forEach(p=>{
+    const div = document.createElement("div");
+    div.className="point-item";
+
+    div.innerHTML = `
+      <b>${p.category}</b><br>
+      ${p.status}<br>
+      <button onclick="toggle(${p.id})">Показать/скрыть</button>
+      <button onclick="removePoint(${p.id})">Удалить</button>
+    `;
+
+    panel.appendChild(div);
+  });
+}
+
+// ================= ACTIONS =================
+function toggle(id){
+  let points = getLocal();
+  points = points.map(p=>{
+    if(p.id===id) p.visible = !p.visible;
+    return p;
+  });
+  saveLocal(points);
+  location.reload();
+}
+
+function removePoint(id){
+  let points = getLocal().filter(p=>p.id!==id);
+  saveLocal(points);
+  location.reload();
+}
+
+// ================= PANEL =================
+function openPanel(){
+  document.getElementById("panel").style.display="block";
+  document.getElementById("coords").innerText =
+    current.lat.toFixed(5)+", "+current.lng.toFixed(5);
+}
+
+function closePanel(){
+  document.getElementById("panel").style.display="none";
+}
+
+// ================= START =================
 init();
 
 </script>
