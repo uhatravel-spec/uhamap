@@ -25,7 +25,6 @@ body {
     z-index:1;
 }
 
-/* 🔥 форма как у тебя, но поверх карты */
 .point-form {
     position: fixed;
     bottom: 0;
@@ -96,7 +95,6 @@ button.cancel {
 <div id="map"></div>
 <div class="loading" id="loading">⏳ Сохранение...</div>
 
-<!-- 📍 ФОРМА -->
 <div id="pointForm" class="point-form hidden">
 
     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -133,56 +131,20 @@ button.cancel {
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-const API = "https://script.google.com/macros/s/AKfycbwlOgngZosEiq_7uHYbicL5EtwC88V0IcXiyUCCQGGddxBTXf4iVWGrMbArTIwquWHb/exec";
+const API = "YOUR_API_URL";
 
 let map;
 let current = null;
 let markerTemp = null;
-let waterLayer = null;
 
-// ================= СЛОИ =================
-const osm = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png');
-
-const satellite = L.tileLayer(
-  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-);
-
-const labels = L.tileLayer(
-  'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png'
-);
-
-const hybrid = L.layerGroup([satellite, labels]);
-
-// ================= ИНИЦ =================
+// ================= INIT =================
 function initMap() {
 
-    map = L.map('map', {
-        center:[55.75,37.61],
-        zoom:11,
-        layers:[osm]
-    });
+    map = L.map('map').setView([55.75,37.61],11);
 
-    const base = {
-        "Карта": osm,
-        "Спутник": satellite,
-        "Гибрид": hybrid
-    };
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png')
+        .addTo(map);
 
-    L.control.layers(base).addTo(map);
-
-    // 💾 слой память
-    const saved = localStorage.getItem("uhamap_layer");
-    if (saved === "sat") satellite.addTo(map);
-    else if (saved === "hybrid") hybrid.addTo(map);
-    else osm.addTo(map);
-
-    map.on("baselayerchange", (e)=>{
-        if(e.name==="Спутник") localStorage.setItem("uhamap_layer","sat");
-        if(e.name==="Гибрид") localStorage.setItem("uhamap_layer","hybrid");
-        if(e.name==="Карта") localStorage.setItem("uhamap_layer","osm");
-    });
-
-    // 📍 клик
     map.on("click",(e)=>{
         current = e.latlng;
 
@@ -190,12 +152,7 @@ function initMap() {
             map.removeLayer(markerTemp);
         }
 
-        markerTemp = L.marker(current, {
-            icon: L.icon({
-                iconUrl: "https://maps.gstatic.com/mapfiles/api-3/images/spotlight-poi2_hdpi.png",
-                iconSize:[27,43]
-            })
-        }).addTo(map);
+        markerTemp = L.marker(current).addTo(map);
 
         document.getElementById("coordInfo").innerText =
             `📍 ${current.lat.toFixed(5)}, ${current.lng.toFixed(5)}`;
@@ -203,29 +160,23 @@ function initMap() {
         openForm();
     });
 
-    loadWaterBodies();
+    loadPoints(); // 🔥 теперь грузим с сервера
 }
 
-// ================= ВОДОЁМЫ =================
-async function loadWaterBodies() {
-    try {
-        const res = await fetch(API + "?action=getWaterBodies");
-        const data = await res.json();
+// ================= LOAD POINTS (FIX) =================
+async function loadPoints(){
 
-        waterLayer = L.geoJSON(data,{
-            style:(f)=>({
-                color:f.properties?.color || "#2a9d8f",
-                weight:3,
-                fillOpacity:0.1
-            }),
-            onEachFeature:(f,l)=>{
-                l.bindPopup("🌊 " + (f.properties?.name || "Водоём"));
-            }
-        }).addTo(map);
+    const res = await fetch(API + "?action=getPoints");
+    const data = await res.json();
 
-    } catch(e){
-        console.log(e);
-    }
+    data.forEach(p => {
+
+        if(p.status !== "approved") return;
+
+        L.marker([p.lat, p.lng])
+            .addTo(map)
+            .bindPopup(`📍 ${p.category}<br>${p.description || ""}`);
+    });
 }
 
 // ================= FORM =================
@@ -243,33 +194,39 @@ function closeForm(){
     }
 }
 
-// ================= SAVE =================
+// ================= SAVE (FIXED) =================
 async function savePoint(){
 
     if(!current) return;
 
     const data = {
-        lat:current.lat,
-        lng:current.lng,
-        category:document.getElementById("category").value,
-        access:document.getElementById("access").value,
-        description:document.getElementById("desc").value
+        lat: current.lat,
+        lng: current.lng,
+        category: document.getElementById("category").value,
+        access: document.getElementById("access").value,
+        description: document.getElementById("desc").value,
+
+        // 🔥 ВАЖНО ДЛЯ BACKEND
+        user_id: tg.initDataUnsafe?.user?.id,
+        user_name: tg.initDataUnsafe?.user?.first_name
     };
 
     document.getElementById("loading").style.display="block";
 
-    const res = await fetch(API,{
+    await fetch(API,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({action:"savePoint",data})
+        body:JSON.stringify({
+            action:"savePoint",
+            data
+        })
     });
-
-    L.marker([data.lat,data.lng]).addTo(map)
-        .bindPopup(`📍 ${data.category}`);
 
     document.getElementById("loading").style.display="none";
 
     closeForm();
+
+    alert("Отправлено на модерацию");
 }
 
 // ================= START =================
