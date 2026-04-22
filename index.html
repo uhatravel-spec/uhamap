@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>UhaMap</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -10,82 +10,28 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <style>
-* { margin:0; padding:0; box-sizing:border-box; }
+body { margin:0; font-family:Arial; }
+#map { height:100vh; }
 
-body {
-    font-family: -apple-system, BlinkMacSystemFont, Arial;
-    height:100vh;
-    display:flex;
-    flex-direction:column;
+.panel {
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  background:white;
+  padding:12px;
+  display:none;
 }
 
-#map {
-    flex:1;
-    width:100%;
-    z-index:1;
-}
-
-.point-form {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-
-    background:white;
-    padding:16px;
-    border-radius:18px 18px 0 0;
-    box-shadow:0 -5px 20px rgba(0,0,0,0.2);
-
-    z-index:9999;
-
-    max-height:70vh;
-    overflow-y:auto;
-}
-
-.hidden { display:none; }
-
-.coord-info {
-    background:#e9f5ff;
-    padding:8px;
-    border-radius:10px;
-    margin-bottom:10px;
-    font-size:13px;
-}
-
-select, textarea {
-    width:100%;
-    padding:10px;
-    margin-bottom:10px;
-    border-radius:10px;
-    border:1px solid #ccc;
-}
-
-button {
-    width:100%;
-    padding:12px;
-    border:none;
-    border-radius:25px;
-    font-weight:bold;
-    background:#2a9d8f;
-    color:white;
-}
-
-button.cancel {
-    background:#ccc;
-    margin-top:10px;
-}
-
-.loading {
-    position:fixed;
-    bottom:20px;
-    left:50%;
-    transform:translateX(-50%);
-    background:rgba(0,0,0,0.8);
-    color:#fff;
-    padding:8px 16px;
-    border-radius:20px;
-    display:none;
-    z-index:9999;
+.admin {
+  position:fixed;
+  right:0;
+  top:0;
+  width:300px;
+  height:100%;
+  background:#fff;
+  overflow:auto;
+  display:none;
 }
 </style>
 </head>
@@ -93,144 +39,141 @@ button.cancel {
 <body>
 
 <div id="map"></div>
-<div class="loading" id="loading">⏳ Сохранение...</div>
-
-<div id="pointForm" class="point-form hidden">
-
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h3>📍 Новая точка</h3>
-        <span onclick="closeForm()" style="cursor:pointer;">✖</span>
-    </div>
-
-    <div class="coord-info" id="coordInfo">Координаты: —</div>
-
-    <select id="category">
-        <option value="рыбалка">🎣 Рыбалка</option>
-        <option value="платная рыбалка">💰 Платная рыбалка</option>
-        <option value="кемпинг">⛺ Кемпинг</option>
-        <option value="пляж">🏖️ Пляж</option>
-        <option value="опасно">⚠️ Опасно</option>
-        <option value="родник">💧 Родник</option>
-    </select>
-
-    <select id="access">
-        <option value="легковой">Легковой</option>
-        <option value="внедорожник">Внедорожник</option>
-        <option value="пешком">Пешком</option>
-        <option value="лодка">Лодка</option>
-    </select>
-
-    <textarea id="desc" placeholder="Описание"></textarea>
-
-    <button onclick="savePoint()">Сохранить</button>
-    <button class="cancel" onclick="closeForm()">Отмена</button>
-</div>
+<div class="panel" id="panel"></div>
+<div class="admin" id="admin"></div>
 
 <script>
 
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-const API = "YOUR_API_URL";
+const API = "PUT_API_URL";
 
 let map;
-let current = null;
-let markerTemp = null;
+let current;
+
+// ================= FULL CATEGORY ICONS =================
+function getIcon(cat) {
+
+  const icons = {
+    "рыбалка": "🎣",
+    "платная рыбалка": "💰🎣",
+    "кемпинг": "⛺",
+    "лагерь": "🏕️",
+    "палатка": "⛺",
+    "база отдыха": "🏡",
+
+    "пляж": "🏖️",
+    "платный пляж": "💰🏖️",
+    "купание": "🌊",
+    "спуск катера": "🚤",
+    "пирс": "🌉",
+
+    "опасно": "⚠️",
+    "зимний проезд": "❄️",
+
+    "родник": "💧",
+    "колодец": "🪣",
+    "арт-объект": "🎨",
+    "достопримечательность": "🏛️",
+    "загадочное место": "❓",
+    "дикое место": "🌲",
+
+    "пожарная часть": "🚒",
+    "медпомощь": "🏥",
+    "туалет": "🚻",
+    "мусор": "🗑️"
+  };
+
+  return L.divIcon({
+    html: `<div style="font-size:20px">${icons[cat] || "📍"}</div>`,
+    className: ""
+  });
+}
 
 // ================= INIT =================
-function initMap() {
+function init() {
 
-    map = L.map('map').setView([55.75,37.61],11);
+  map = L.map('map').setView([55, 37], 10);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png')
-        .addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    map.on("click",(e)=>{
-        current = e.latlng;
+  map.on("click", e => {
+    current = e.latlng;
+    openForm();
+  });
 
-        if(markerTemp){
-            map.removeLayer(markerTemp);
-        }
-
-        markerTemp = L.marker(current).addTo(map);
-
-        document.getElementById("coordInfo").innerText =
-            `📍 ${current.lat.toFixed(5)}, ${current.lng.toFixed(5)}`;
-
-        openForm();
-    });
-
-    loadPoints(); // 🔥 теперь грузим с сервера
+  loadPoints();
+  loadAdmin();
 }
 
-// ================= LOAD POINTS (FIX) =================
-async function loadPoints(){
+// ================= LOAD POINTS =================
+async function loadPoints() {
 
-    const res = await fetch(API + "?action=getPoints");
-    const data = await res.json();
+  const res = await fetch(API + "?action=getPoints");
+  const data = await res.json();
 
-    data.forEach(p => {
-
-        if(p.status !== "approved") return;
-
-        L.marker([p.lat, p.lng])
-            .addTo(map)
-            .bindPopup(`📍 ${p.category}<br>${p.description || ""}`);
-    });
+  data.forEach(p => {
+    L.marker([p.lat, p.lng], { icon: getIcon(p.category) })
+      .addTo(map)
+      .bindPopup(p.category);
+  });
 }
 
-// ================= FORM =================
-function openForm(){
-    document.getElementById("pointForm").classList.remove("hidden");
-}
+// ================= SAVE =================
+async function save(category, desc) {
 
-function closeForm(){
-    document.getElementById("pointForm").classList.add("hidden");
-    current=null;
-
-    if(markerTemp){
-        map.removeLayer(markerTemp);
-        markerTemp=null;
-    }
-}
-
-// ================= SAVE (FIXED) =================
-async function savePoint(){
-
-    if(!current) return;
-
-    const data = {
+  await fetch(API, {
+    method: "POST",
+    body: JSON.stringify({
+      action: "savePoint",
+      data: {
         lat: current.lat,
         lng: current.lng,
-        category: document.getElementById("category").value,
-        access: document.getElementById("access").value,
-        description: document.getElementById("desc").value,
-
-        // 🔥 ВАЖНО ДЛЯ BACKEND
+        category,
+        description: desc,
         user_id: tg.initDataUnsafe?.user?.id,
         user_name: tg.initDataUnsafe?.user?.first_name
-    };
+      }
+    })
+  });
 
-    document.getElementById("loading").style.display="block";
-
-    await fetch(API,{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-            action:"savePoint",
-            data
-        })
-    });
-
-    document.getElementById("loading").style.display="none";
-
-    closeForm();
-
-    alert("Отправлено на модерацию");
+  alert("Отправлено");
 }
 
-// ================= START =================
-initMap();
+// ================= ADMIN =================
+async function loadAdmin() {
+
+  const res = await fetch(API + "?action=getPending");
+  const data = await res.json();
+
+  const box = document.getElementById("admin");
+  box.style.display = "block";
+
+  box.innerHTML = "<h3>Модерация</h3>";
+
+  data.forEach(p => {
+
+    const div = document.createElement("div");
+
+    div.innerHTML = `
+      <b>${p.category}</b><br>
+      ${p.user}<br>
+      <button onclick="approve('${p.id}')">Approve</button>
+    `;
+
+    box.appendChild(div);
+  });
+}
+
+function approve(id) {
+  fetch(API, {
+    method: "POST",
+    body: JSON.stringify({ action: "approve", id })
+  });
+}
+
+init();
 
 </script>
 
