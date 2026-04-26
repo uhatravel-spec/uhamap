@@ -26,6 +26,7 @@ body { margin:0; font-family:Arial; }
   border:none;
   padding:10px;
   border-radius:10px;
+  margin-bottom:5px;
 }
 
 .panel {
@@ -49,11 +50,6 @@ select, textarea, button {
   padding:10px;
 }
 
-.point-item {
-  border-bottom:1px solid #eee;
-  padding:10px;
-}
-
 .photos img {
   width:70px;
   height:70px;
@@ -72,7 +68,6 @@ select, textarea, button {
   <button onclick="openMyPoints()">📂 Мои точки</button>
 </div>
 
-<!-- FORM -->
 <div class="panel" id="panel">
 
   <h3>📍 Новая точка</h3>
@@ -95,19 +90,18 @@ select, textarea, button {
     <textarea id="desc" placeholder="Описание"></textarea>
   </div>
 
-  <button onclick="requestGeoAndPhoto()">📸 Сделать фото</button>
-
+  <button onclick="requestCamera()">📸 Сделать фото</button>
   <input type="file" id="camera" accept="image/*" capture="environment" hidden>
 
   <div class="photos" id="photos"></div>
 
-  <button onclick="saveDraft()">Сохранить</button>
-  <button onclick="publish()">Отправить на модерацию</button>
+  <button onclick="saveDraft()">Сохранить (локально)</button>
+  <button onclick="publish()">Опубликовать</button>
   <button onclick="closePanel()">Закрыть</button>
 
 </div>
 
-<div class="panel" id="myPointsPanel"></div>
+<div class="panel" id="myPanel"></div>
 
 <script>
 
@@ -120,24 +114,22 @@ let map;
 let current = null;
 let tempMarker = null;
 let userMarker = null;
-
 let photos = [];
-let userGeo = null;
 
 // ================= ICONS =================
 const icons = {
-  "рыбалка":"🎣","платная рыбалка":"💰🎣","кемпинг":"⛺","лагерь":"🏕️",
-  "палатка":"⛺","база отдыха":"🏡","пляж":"🏖️","платный пляж":"💰🏖️",
-  "место для купания":"🌊","спуск катера":"🚤","пирс":"🌉",
-  "опасный участок дороги":"⚠️","зимний проезд":"❄️",
-  "родник":"💧","колодец":"🪣","арт-объект":"🎨","достопримечательность":"🏛️",
-  "загадочное место":"❓","дикое место":"🌲",
-  "пожарная часть":"🚒","медпомощь":"🏥","туалет":"🚻","мусорный бак":"🗑️"
+  "рыбалка":"🎣",
+  "платная рыбалка":"💰🎣",
+  "кемпинг":"⛺",
+  "пляж":"🏖️",
+  "опасно":"⚠️",
+  "родник":"💧",
+  "пирс":"🌉"
 };
 
 function icon(cat){
   return L.divIcon({
-    html:`<div style="font-size:20px">${icons[cat] || "📍"}</div>`,
+    html:`<div style="font-size:22px">${icons[cat] || "📍"}</div>`,
     className:""
   });
 }
@@ -149,23 +141,19 @@ function init(){
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-  // 📍 геолокация старта
-  map.locate({setView:true, maxZoom:15});
+  // 🔵 BLUE LOCATION DOT (FIX)
+  map.locate({setView:true, watch:true});
 
   map.on("locationfound", e=>{
-    userGeo = e.latlng;
 
     if(userMarker) map.removeLayer(userMarker);
 
     userMarker = L.circleMarker(e.latlng,{
       radius:8,
-      color:"blue"
+      color:"blue",
+      fillColor:"blue",
+      fillOpacity:1
     }).addTo(map).bindPopup("Вы здесь");
-  });
-
-  map.on("locationerror", ()=>{
-    map.setView([55,37],10);
-    alert("Разрешите геолокацию для точного позиционирования");
   });
 
   map.on("click", e=>{
@@ -173,18 +161,18 @@ function init(){
 
     if(tempMarker) map.removeLayer(tempMarker);
 
-    tempMarker = L.marker(current).addTo(map);
+    tempMarker = L.marker(current,{icon: icon("рыбалка")}).addTo(map);
 
     openPanel();
   });
 
   fillCategories();
   loadPoints();
-  loadLocal();
 }
 
 // ================= CATEGORY =================
 function fillCategories(){
+
   const sel = document.getElementById("category");
   sel.innerHTML = "";
 
@@ -196,38 +184,18 @@ function fillCategories(){
   });
 
   sel.onchange = ()=>{
+
     if(tempMarker) map.removeLayer(tempMarker);
-    tempMarker = L.marker(current,{icon:icon(sel.value)}).addTo(map);
+
+    tempMarker = L.marker(current,{
+      icon: icon(sel.value)
+    }).addTo(map);
   };
 }
 
-// ================= CAMERA FIX (CRITICAL) =================
-function requestGeoAndPhoto(){
-
-  if(photos.length >= 5){
-    alert("Максимум 5 фото");
-    return;
-  }
-
-  alert("Сделайте фото рядом с точкой (до 100 м)");
-
-  navigator.geolocation.getCurrentPosition(pos=>{
-
-    userGeo = {
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude
-    };
-
-    // 🔥 FIX: прямой вызов без setTimeout
-    const input = document.getElementById("camera");
-    input.value = "";
-    input.click();
-
-  },()=>{
-    alert("Нужно разрешить геолокацию");
-  },{
-    enableHighAccuracy:true
-  });
+// ================= CAMERA FIX =================
+function requestCamera(){
+  document.getElementById("camera").click();
 }
 
 // ================= PHOTO =================
@@ -239,13 +207,7 @@ document.getElementById("camera").addEventListener("change", e=>{
   const reader = new FileReader();
 
   reader.onload = ev=>{
-
-    photos.push({
-      img: ev.target.result,
-      geo: userGeo,
-      time: Date.now()
-    });
-
+    photos.push(ev.target.result);
     renderPhotos();
   };
 
@@ -260,7 +222,7 @@ function renderPhotos(){
   photos.forEach((p,i)=>{
 
     let img = document.createElement("img");
-    img.src = p.img;
+    img.src = p;
 
     img.onclick = ()=>{
       photos.splice(i,1);
@@ -271,41 +233,30 @@ function renderPhotos(){
   });
 }
 
-// ================= LOCAL =================
-function getLocal(){
-  return JSON.parse(localStorage.getItem("points") || "[]");
-}
-
-// ================= SAVE =================
+// ================= SAVE LOCAL =================
 function saveDraft(){
 
-  const data = {
-    id: Date.now(),
-    lat: current.lat,
-    lng: current.lng,
-    category: document.getElementById("category").value,
-    access: document.getElementById("access").value,
-    desc: document.getElementById("desc").value,
+  const arr = JSON.parse(localStorage.getItem("points") || "[]");
+
+  arr.push({
+    id:Date.now(),
+    lat:current.lat,
+    lng:current.lng,
+    category:document.getElementById("category").value,
+    access:document.getElementById("access").value,
+    desc:document.getElementById("desc").value,
     photos,
     status:"draft"
-  };
-
-  const arr = getLocal();
-  arr.push(data);
+  });
 
   localStorage.setItem("points", JSON.stringify(arr));
 
-  draw(data);
   closePanel();
+  alert("Сохранено локально");
 }
 
 // ================= PUBLISH =================
 function publish(){
-
-  if(photos.length < 1){
-    alert("Нужно минимум 1 фото");
-    return;
-  }
 
   fetch(API,{
     method:"POST",
@@ -313,15 +264,14 @@ function publish(){
     body:JSON.stringify({
       action:"savePoint",
       data:{
-        lat: current.lat,
-        lng: current.lng,
-        category: document.getElementById("category").value,
-        access: document.getElementById("access").value,
-        description: document.getElementById("desc").value,
+        lat:current.lat,
+        lng:current.lng,
+        category:document.getElementById("category").value,
+        access:document.getElementById("access").value,
+        description:document.getElementById("desc").value,
         photos,
-        user_id: tg.initDataUnsafe?.user?.id,
-        user_name: tg.initDataUnsafe?.user?.first_name,
-        geo: userGeo
+        user_id:tg.initDataUnsafe?.user?.id,
+        user_name:tg.initDataUnsafe?.user?.first_name
       }
     })
   });
@@ -333,38 +283,55 @@ function publish(){
 // ================= LOAD =================
 async function loadPoints(){
 
-  const r = await fetch(API+"?action=getPoints");
-  const d = await r.json();
+  const res = await fetch(API+"?action=getPoints");
+  const data = await res.json();
 
-  d.forEach(p=>{
+  data.forEach(p=>{
     L.marker([p.lat,p.lng],{
       icon: icon(p.category)
     }).addTo(map);
   });
 }
 
-// ================= LOCAL =================
-function loadLocal(){
-  getLocal().forEach(draw);
+// ================= MY POINTS =================
+function openMyPoints(){
+
+  const box = document.getElementById("myPanel");
+  box.style.display = "block";
+  box.innerHTML = "<h3>Мои точки</h3>";
+
+  const arr = JSON.parse(localStorage.getItem("points") || "[]");
+
+  arr.forEach(p=>{
+    const div = document.createElement("div");
+    div.innerHTML = `
+      <b>${p.category}</b><br>
+      ${p.desc || ""}<br>
+      <button onclick="deletePoint(${p.id})">Удалить</button>
+    `;
+    box.appendChild(div);
+  });
 }
 
-function draw(p){
-  L.marker([p.lat,p.lng],{
-    icon: icon(p.category)
-  }).addTo(map);
+function deletePoint(id){
+
+  let arr = JSON.parse(localStorage.getItem("points") || "[]");
+  arr = arr.filter(x=>x.id !== id);
+
+  localStorage.setItem("points", JSON.stringify(arr));
+  openMyPoints();
 }
 
 // ================= PANEL =================
 function openPanel(){
-  panel.style.display = "block";
-  coords.innerText = current.lat.toFixed(5)+","+current.lng.toFixed(5);
-
-  photos = [];
+  panel.style.display="block";
+  coords.innerText = current.lat.toFixed(5)+", "+current.lng.toFixed(5);
+  photos=[];
   renderPhotos();
 }
 
 function closePanel(){
-  panel.style.display = "none";
+  panel.style.display="none";
 }
 
 init();
