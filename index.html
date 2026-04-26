@@ -72,7 +72,7 @@ select, textarea, button {
   <button onclick="openMyPoints()">📂 Мои точки</button>
 </div>
 
-<!-- ================= FORM ================= -->
+<!-- FORM -->
 <div class="panel" id="panel">
 
   <h3>📍 Новая точка</h3>
@@ -97,6 +97,7 @@ select, textarea, button {
 
   <button onclick="requestGeoAndPhoto()">📸 Сделать фото</button>
 
+  <!-- IMPORTANT: capture MUST stay -->
   <input type="file" id="camera" accept="image/*" capture="environment" hidden>
 
   <div class="photos" id="photos"></div>
@@ -211,13 +212,15 @@ function fillCategories(){
   };
 }
 
-// ================= CAMERA FIX =================
+// ================= CAMERA FLOW (FIXED) =================
 function requestGeoAndPhoto(){
 
-  if(!navigator.geolocation){
-    alert("Геолокация недоступна");
+  if(photos.length >= 5){
+    alert("Максимум 5 фото");
     return;
   }
+
+  alert("Сделайте фото рядом с точкой (до 100 м)");
 
   navigator.geolocation.getCurrentPosition(pos=>{
 
@@ -226,24 +229,20 @@ function requestGeoAndPhoto(){
       lng: pos.coords.longitude
     };
 
-    const ok = confirm("Фото будет привязано к геолокации. Продолжить?");
-    if(!ok) return;
-
-    openCamera();
+    // CRITICAL FIX:
+    // must be direct user action chain
+    setTimeout(()=>{
+      document.getElementById("camera").click();
+    },100);
 
   },()=>{
-    alert("Без геолокации фото запрещено");
+    alert("Нужно разрешить геолокацию");
+  },{
+    enableHighAccuracy:true
   });
 }
 
-// ================= OPEN CAMERA =================
-function openCamera(){
-  const input = document.getElementById("camera");
-  input.value = "";
-  input.click();
-}
-
-// ================= PHOTO HANDLER =================
+// ================= CAMERA INPUT =================
 document.getElementById("camera").addEventListener("change", e=>{
 
   const file = e.target.files[0];
@@ -252,6 +251,7 @@ document.getElementById("camera").addEventListener("change", e=>{
   const reader = new FileReader();
 
   reader.onload = ev=>{
+
     photos.push({
       img: ev.target.result,
       geo: userGeo,
@@ -264,11 +264,14 @@ document.getElementById("camera").addEventListener("change", e=>{
   reader.readAsDataURL(file);
 });
 
+// ================= RENDER PHOTOS =================
 function renderPhotos(){
+
   const box = document.getElementById("photos");
   box.innerHTML = "";
 
   photos.forEach((p,i)=>{
+
     let img = document.createElement("img");
     img.src = p.img;
 
@@ -297,11 +300,10 @@ function saveDraft(){
     access: access.value,
     desc: desc.value,
     photos,
-    status: "draft",
-    visible: true
+    status: "draft"
   };
 
-  let arr = getLocal();
+  const arr = getLocal();
   arr.push(data);
 
   localStorage.setItem("points", JSON.stringify(arr));
@@ -376,8 +378,8 @@ function openMyPoints(){
   panel.innerHTML = "<h3>Мои точки</h3>";
 
   list.forEach(x=>{
-    const div = document.createElement("div");
 
+    const div = document.createElement("div");
     div.className = "point-item";
 
     div.innerHTML = `
@@ -412,5 +414,6 @@ function closePanel(){
 init();
 
 </script>
+
 </body>
 </html>
