@@ -215,22 +215,24 @@ function fillCategories(){
 // ================= ФОТО =================
 function takePhoto(){
 
-  alert("Фото только с включенной геолокацией");
-
-  navigator.geolocation.getCurrentPosition(()=>{
-    document.getElementById("cameraInput").click();
-  });
-}
-
-document.getElementById("cameraInput").onchange = function(e){
-
-  const file = e.target.files[0];
-  if(!file) return;
-
-  if(photos.length >= 5){
-    alert("Максимум 5 фото");
+  if(!navigator.geolocation){
+    alert("Геолокация не поддерживается");
     return;
   }
+
+  alert("Разреши геолокацию, затем откроется камера");
+
+  navigator.geolocation.getCurrentPosition(
+    () => {
+      // гео разрешено — теперь можно
+      document.getElementById("cameraInput").click();
+    },
+    () => {
+      alert("Без геолокации нельзя сделать фото");
+    }
+  );
+
+
 
   const reader = new FileReader();
 
