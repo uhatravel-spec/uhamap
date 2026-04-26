@@ -97,7 +97,6 @@ select, textarea, button {
 
   <button onclick="requestGeoAndPhoto()">📸 Сделать фото</button>
 
-  <!-- IMPORTANT: capture MUST stay -->
   <input type="file" id="camera" accept="image/*" capture="environment" hidden>
 
   <div class="photos" id="photos"></div>
@@ -127,29 +126,13 @@ let userGeo = null;
 
 // ================= ICONS =================
 const icons = {
-  "рыбалка":"🎣",
-  "платная рыбалка":"💰🎣",
-  "кемпинг":"⛺",
-  "лагерь":"🏕️",
-  "палатка":"⛺",
-  "база отдыха":"🏡",
-  "пляж":"🏖️",
-  "платный пляж":"💰🏖️",
-  "место для купания":"🌊",
-  "спуск катера":"🚤",
-  "пирс":"🌉",
-  "опасный участок дороги":"⚠️",
-  "зимний проезд":"❄️",
-  "родник":"💧",
-  "колодец":"🪣",
-  "арт-объект":"🎨",
-  "достопримечательность":"🏛️",
-  "загадочное место":"❓",
-  "дикое место":"🌲",
-  "пожарная часть":"🚒",
-  "медпомощь":"🏥",
-  "туалет":"🚻",
-  "мусорный бак":"🗑️"
+  "рыбалка":"🎣","платная рыбалка":"💰🎣","кемпинг":"⛺","лагерь":"🏕️",
+  "палатка":"⛺","база отдыха":"🏡","пляж":"🏖️","платный пляж":"💰🏖️",
+  "место для купания":"🌊","спуск катера":"🚤","пирс":"🌉",
+  "опасный участок дороги":"⚠️","зимний проезд":"❄️",
+  "родник":"💧","колодец":"🪣","арт-объект":"🎨","достопримечательность":"🏛️",
+  "загадочное место":"❓","дикое место":"🌲",
+  "пожарная часть":"🚒","медпомощь":"🏥","туалет":"🚻","мусорный бак":"🗑️"
 };
 
 function icon(cat){
@@ -166,7 +149,8 @@ function init(){
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-  map.locate({setView:true});
+  // 📍 геолокация старта
+  map.locate({setView:true, maxZoom:15});
 
   map.on("locationfound", e=>{
     userGeo = e.latlng;
@@ -177,6 +161,11 @@ function init(){
       radius:8,
       color:"blue"
     }).addTo(map).bindPopup("Вы здесь");
+  });
+
+  map.on("locationerror", ()=>{
+    map.setView([55,37],10);
+    alert("Разрешите геолокацию для точного позиционирования");
   });
 
   map.on("click", e=>{
@@ -212,7 +201,7 @@ function fillCategories(){
   };
 }
 
-// ================= CAMERA FLOW (FIXED) =================
+// ================= CAMERA FIX (CRITICAL) =================
 function requestGeoAndPhoto(){
 
   if(photos.length >= 5){
@@ -229,11 +218,10 @@ function requestGeoAndPhoto(){
       lng: pos.coords.longitude
     };
 
-    // CRITICAL FIX:
-    // must be direct user action chain
-    setTimeout(()=>{
-      document.getElementById("camera").click();
-    },100);
+    // 🔥 FIX: прямой вызов без setTimeout
+    const input = document.getElementById("camera");
+    input.value = "";
+    input.click();
 
   },()=>{
     alert("Нужно разрешить геолокацию");
@@ -242,7 +230,7 @@ function requestGeoAndPhoto(){
   });
 }
 
-// ================= CAMERA INPUT =================
+// ================= PHOTO =================
 document.getElementById("camera").addEventListener("change", e=>{
 
   const file = e.target.files[0];
@@ -264,7 +252,6 @@ document.getElementById("camera").addEventListener("change", e=>{
   reader.readAsDataURL(file);
 });
 
-// ================= RENDER PHOTOS =================
 function renderPhotos(){
 
   const box = document.getElementById("photos");
@@ -296,11 +283,11 @@ function saveDraft(){
     id: Date.now(),
     lat: current.lat,
     lng: current.lng,
-    category: category.value,
-    access: access.value,
-    desc: desc.value,
+    category: document.getElementById("category").value,
+    access: document.getElementById("access").value,
+    desc: document.getElementById("desc").value,
     photos,
-    status: "draft"
+    status:"draft"
   };
 
   const arr = getLocal();
@@ -328,9 +315,9 @@ function publish(){
       data:{
         lat: current.lat,
         lng: current.lng,
-        category: category.value,
-        access: access.value,
-        description: desc.value,
+        category: document.getElementById("category").value,
+        access: document.getElementById("access").value,
+        description: document.getElementById("desc").value,
         photos,
         user_id: tg.initDataUnsafe?.user?.id,
         user_name: tg.initDataUnsafe?.user?.first_name,
@@ -367,37 +354,6 @@ function draw(p){
   }).addTo(map);
 }
 
-// ================= MY POINTS =================
-function openMyPoints(){
-
-  const panel = document.getElementById("myPointsPanel");
-  panel.style.display = "block";
-
-  const list = getLocal();
-
-  panel.innerHTML = "<h3>Мои точки</h3>";
-
-  list.forEach(x=>{
-
-    const div = document.createElement("div");
-    div.className = "point-item";
-
-    div.innerHTML = `
-      <b>${x.category}</b><br>
-      ${x.status || "draft"}<br>
-      <button onclick="removePoint(${x.id})">Удалить</button>
-    `;
-
-    panel.appendChild(div);
-  });
-}
-
-function removePoint(id){
-  let arr = getLocal().filter(x=>x.id !== id);
-  localStorage.setItem("points", JSON.stringify(arr));
-  location.reload();
-}
-
 // ================= PANEL =================
 function openPanel(){
   panel.style.display = "block";
@@ -414,6 +370,5 @@ function closePanel(){
 init();
 
 </script>
-
 </body>
 </html>
