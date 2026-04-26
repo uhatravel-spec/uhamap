@@ -96,6 +96,7 @@ select, textarea, button {
   </div>
 
   <button onclick="requestGeoAndPhoto()">📸 Сделать фото</button>
+
   <input type="file" id="camera" accept="image/*" capture="environment" hidden>
 
   <div class="photos" id="photos"></div>
@@ -192,7 +193,7 @@ function init(){
   loadLocal();
 }
 
-// ================= CATEGORIES =================
+// ================= CATEGORY =================
 function fillCategories(){
   const sel = document.getElementById("category");
   sel.innerHTML = "";
@@ -210,10 +211,13 @@ function fillCategories(){
   };
 }
 
-// ================= GEO + PHOTO =================
+// ================= CAMERA FIX =================
 function requestGeoAndPhoto(){
 
-  alert("Фото только с подтверждённой геолокацией");
+  if(!navigator.geolocation){
+    alert("Геолокация недоступна");
+    return;
+  }
 
   navigator.geolocation.getCurrentPosition(pos=>{
 
@@ -222,14 +226,26 @@ function requestGeoAndPhoto(){
       lng: pos.coords.longitude
     };
 
-    document.getElementById("camera").click();
+    const ok = confirm("Фото будет привязано к геолокации. Продолжить?");
+    if(!ok) return;
+
+    openCamera();
 
   },()=>{
     alert("Без геолокации фото запрещено");
   });
 }
 
-document.getElementById("camera").onchange = e=>{
+// ================= OPEN CAMERA =================
+function openCamera(){
+  const input = document.getElementById("camera");
+  input.value = "";
+  input.click();
+}
+
+// ================= PHOTO HANDLER =================
+document.getElementById("camera").addEventListener("change", e=>{
+
   const file = e.target.files[0];
   if(!file) return;
 
@@ -246,7 +262,7 @@ document.getElementById("camera").onchange = e=>{
   };
 
   reader.readAsDataURL(file);
-};
+});
 
 function renderPhotos(){
   const box = document.getElementById("photos");
@@ -270,7 +286,7 @@ function getLocal(){
   return JSON.parse(localStorage.getItem("points") || "[]");
 }
 
-// ================= SAVE DRAFT =================
+// ================= SAVE =================
 function saveDraft(){
 
   const data = {
@@ -285,7 +301,7 @@ function saveDraft(){
     visible: true
   };
 
-  const arr = getLocal();
+  let arr = getLocal();
   arr.push(data);
 
   localStorage.setItem("points", JSON.stringify(arr));
@@ -338,7 +354,7 @@ async function loadPoints(){
   });
 }
 
-// ================= LOCAL DRAW =================
+// ================= LOCAL =================
 function loadLocal(){
   getLocal().forEach(draw);
 }
@@ -353,7 +369,7 @@ function draw(p){
 function openMyPoints(){
 
   const panel = document.getElementById("myPointsPanel");
-  panel.style.display="block";
+  panel.style.display = "block";
 
   const list = getLocal();
 
@@ -366,7 +382,7 @@ function openMyPoints(){
 
     div.innerHTML = `
       <b>${x.category}</b><br>
-      ${x.status}<br>
+      ${x.status || "draft"}<br>
       <button onclick="removePoint(${x.id})">Удалить</button>
     `;
 
