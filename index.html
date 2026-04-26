@@ -43,12 +43,10 @@ body { margin:0; font-family:Arial; }
 }
 
 .row { margin-bottom:10px; }
-select, textarea { width:100%; padding:10px; }
 
-button {
+select, textarea, button {
   width:100%;
-  padding:12px;
-  margin-top:5px;
+  padding:10px;
 }
 
 .point-item {
@@ -74,7 +72,6 @@ button {
   <button onclick="openMyPoints()">📂 Мои точки</button>
 </div>
 
-<!-- ФОРМА -->
 <div class="panel" id="panel">
 
   <h3>📍 Новая точка</h3>
@@ -86,10 +83,10 @@ button {
 
   <div class="row">
     <select id="access">
-      <option value="легковой">Легковой</option>
-      <option value="внедорожник">Внедорожник</option>
-      <option value="пешком">Пешком</option>
-      <option value="лодка">Лодка</option>
+      <option>легковой</option>
+      <option>внедорожник</option>
+      <option>пешком</option>
+      <option>лодка</option>
     </select>
   </div>
 
@@ -97,13 +94,13 @@ button {
     <textarea id="desc" placeholder="Описание"></textarea>
   </div>
 
-  <!-- 📸 ФОТО -->
-  <button onclick="takePhoto()">📸 Сделать фото</button>
-  <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+  <button onclick="requestGeoAndPhoto()">📸 Сделать фото</button>
+  <input type="file" id="camera" accept="image/*" capture="environment" hidden>
+
   <div class="photos" id="photos"></div>
 
   <button onclick="saveDraft()">Сохранить</button>
-  <button onclick="publishPoint()">Опубликовать</button>
+  <button onclick="publish()">Отправить на модерацию</button>
   <button onclick="closePanel()">Закрыть</button>
 
 </div>
@@ -121,31 +118,24 @@ let map;
 let current = null;
 let tempMarker = null;
 let userMarker = null;
+
 let photos = [];
+let userGeo = null;
 
-// ================= КАТЕГОРИИ =================
-const categories = [
-"рыбалка","платная рыбалка","кемпинг","лагерь","палатка","база отдыха",
-"пляж","платный пляж","место для купания","спуск катера","пирс",
-"опасный участок дороги","зимний проезд",
-"родник","колодец","арт-объект","достопримечательность","загадочное место","дикое место",
-"пожарная часть","медпомощь","туалет","мусорный бак"
-];
-
-// ================= ИКОНКИ =================
-const iconMap = {
-"рыбалка":"🎣","платная рыбалка":"💰🎣","кемпинг":"⛺","лагерь":"🏕️",
-"палатка":"⛺","база отдыха":"🏡","пляж":"🏖️","платный пляж":"💰🏖️",
-"место для купания":"🌊","спуск катера":"🚤","пирс":"🌉",
-"опасный участок дороги":"⚠️","зимний проезд":"❄️",
-"родник":"💧","колодец":"🪣","арт-объект":"🎨","достопримечательность":"🏛️",
-"загадочное место":"❓","дикое место":"🌲",
-"пожарная часть":"🚒","медпомощь":"🏥","туалет":"🚻","мусорный бак":"🗑️"
+// ================= ICONS =================
+const icons = {
+  "рыбалка":"🎣","платная рыбалка":"💰🎣","кемпинг":"⛺","лагерь":"🏕️",
+  "палатка":"⛺","база отдыха":"🏡","пляж":"🏖️","платный пляж":"💰🏖️",
+  "место для купания":"🌊","спуск катера":"🚤","пирс":"🌉",
+  "опасный участок дороги":"⚠️","зимний проезд":"❄️",
+  "родник":"💧","колодец":"🪣","арт-объект":"🎨","достопримечательность":"🏛️",
+  "загадочное место":"❓","дикое место":"🌲",
+  "пожарная часть":"🚒","медпомощь":"🏥","туалет":"🚻","мусорный бак":"🗑️"
 };
 
-function getIcon(cat){
+function icon(cat){
   return L.divIcon({
-    html:`<div style="font-size:20px">${iconMap[cat] || "📍"}</div>`,
+    html:`<div style="font-size:20px">${icons[cat]||"📍"}</div>`,
     className:""
   });
 }
@@ -155,21 +145,18 @@ function init(){
 
   map = L.map('map').setView([55,37],10);
 
-  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-  const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-  L.control.layers({"Карта": osm,"Спутник": sat}).addTo(map);
-
-  // 📍 геолокация пользователя
   map.locate({setView:true});
 
   map.on("locationfound", e=>{
+    userGeo = e.latlng;
+
     if(userMarker) map.removeLayer(userMarker);
 
-    userMarker = L.circleMarker(e.latlng,{
-      radius:8,
-      color:"#007bff"
-    }).addTo(map).bindPopup("Вы здесь");
+    userMarker = L.circleMarker(e.latlng,{radius:8,color:"blue"})
+      .addTo(map)
+      .bindPopup("Вы здесь");
   });
 
   map.on("click", e=>{
@@ -184,60 +171,57 @@ function init(){
 
   fillCategories();
   loadPoints();
-  loadLocalPoints();
+  loadLocal();
 }
 
 // ================= CATEGORY =================
 function fillCategories(){
-
   const sel = document.getElementById("category");
-  sel.innerHTML = "";
 
-  categories.forEach((c,i)=>{
-    const opt = document.createElement("option");
-    opt.value = c;
-    opt.innerText = `${iconMap[c] || "📍"} ${c}`;
-    if(i===0) opt.selected = true;
-    sel.appendChild(opt);
+  Object.keys(icons).forEach(c=>{
+    let o=document.createElement("option");
+    o.value=c;
+    o.innerHTML=`${icons[c]} ${c}`;
+    sel.appendChild(o);
   });
 
-  sel.addEventListener("change", ()=>{
-    if(!current) return;
-
+  sel.onchange=()=>{
     if(tempMarker) map.removeLayer(tempMarker);
+    tempMarker = L.marker(current,{icon:icon(sel.value)}).addTo(map);
+  };
+}
 
-    tempMarker = L.marker(current,{
-      icon:getIcon(sel.value)
-    }).addTo(map);
+// ================= GEO + PHOTO =================
+function requestGeoAndPhoto(){
+
+  alert("Разреши геолокацию — это обязательно для фото");
+
+  navigator.geolocation.getCurrentPosition(pos=>{
+    userGeo = {
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude
+    };
+
+    document.getElementById("camera").click();
+
+  },()=>{
+    alert("Без геолокации фото нельзя");
   });
 }
 
-// ================= ФОТО =================
-function takePhoto(){
-
-  if(!navigator.geolocation){
-    alert("Геолокация не поддерживается");
-    return;
-  }
-
-  alert("Разреши геолокацию, затем откроется камера");
-
-  navigator.geolocation.getCurrentPosition(
-    () => {
-      // гео разрешено — теперь можно
-      document.getElementById("cameraInput").click();
-    },
-    () => {
-      alert("Без геолокации нельзя сделать фото");
-    }
-  );
-
-
+document.getElementById("camera").onchange = e=>{
+  const file = e.target.files[0];
+  if(!file) return;
 
   const reader = new FileReader();
 
-  reader.onload = function(ev){
-    photos.push(ev.target.result);
+  reader.onload = ev=>{
+    photos.push({
+      img: ev.target.result,
+      geo: userGeo,
+      time: Date.now()
+    });
+
     renderPhotos();
   };
 
@@ -245,14 +229,14 @@ function takePhoto(){
 };
 
 function renderPhotos(){
-  const box = document.getElementById("photos");
-  box.innerHTML = "";
+  const box=document.getElementById("photos");
+  box.innerHTML="";
 
   photos.forEach((p,i)=>{
-    const img = document.createElement("img");
-    img.src = p;
+    let img=document.createElement("img");
+    img.src=p.img;
 
-    img.onclick = ()=>{
+    img.onclick=()=>{
       photos.splice(i,1);
       renderPhotos();
     };
@@ -261,148 +245,128 @@ function renderPhotos(){
   });
 }
 
-// ================= LOCAL =================
-function getLocal(){
-  return JSON.parse(localStorage.getItem("points") || "[]");
-}
-
-function saveLocal(points){
-  localStorage.setItem("points", JSON.stringify(points));
-}
-
 // ================= SAVE =================
 function saveDraft(){
 
-  if(!current) return;
-
-  const points = getLocal();
-
-  const p = {
-    id: Date.now(),
-    lat: current.lat,
-    lng: current.lng,
-    category: document.getElementById("category").value,
-    description: document.getElementById("desc").value,
+  const data = {
+    id:Date.now(),
+    lat:current.lat,
+    lng:current.lng,
+    category:document.getElementById("category").value,
+    access:document.getElementById("access").value,
+    desc:document.getElementById("desc").value,
     photos,
-    status:"draft",
-    visible:true
+    status:"draft"
   };
 
-  points.push(p);
-  saveLocal(points);
+  let arr=getLocal();
+  arr.push(data);
+  localStorage.setItem("points",JSON.stringify(arr));
 
-  drawPoint(p);
-
+  draw(data);
   closePanel();
 }
 
 // ================= PUBLISH =================
-async function publishPoint(){
+function publish(){
 
-  if(photos.length === 0){
-    alert("Добавь фото");
+  if(photos.length<1){
+    alert("Нужно минимум 1 фото");
     return;
   }
 
-  const data = {
-    lat: current.lat,
-    lng: current.lng,
-    category: document.getElementById("category").value,
-    description: document.getElementById("desc").value,
-    photos,
-    user_id: tg.initDataUnsafe?.user?.id,
-    user_name: tg.initDataUnsafe?.user?.first_name
-  };
-
-  await fetch(API,{
+  fetch(API,{
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({action:"savePoint",data})
+    body:JSON.stringify({
+      action:"savePoint",
+      data:{
+        lat:current.lat,
+        lng:current.lng,
+        category:document.getElementById("category").value,
+        access:document.getElementById("access").value,
+        description:document.getElementById("desc").value,
+        photos,
+        user_id:tg.initDataUnsafe?.user?.id,
+        user_name:tg.initDataUnsafe?.user?.first_name,
+        geo:userGeo
+      }
+    })
   });
 
   alert("Отправлено на модерацию");
   closePanel();
 }
 
-// ================= LOAD =================
+// ================= LOCAL =================
+function getLocal(){
+  return JSON.parse(localStorage.getItem("points")||"[]");
+}
+
+function loadLocal(){
+  getLocal().forEach(draw);
+}
+
+function draw(p){
+  L.marker([p.lat,p.lng],{
+    icon:icon(p.category)
+  }).addTo(map);
+}
+
+// ================= LOAD SERVER =================
 async function loadPoints(){
 
-  const res = await fetch(API+"?action=getPoints");
-  const data = await res.json();
+  const r=await fetch(API+"?action=getPoints");
+  const d=await r.json();
 
-  data.forEach(p=>{
-    if(p.status !== "approved") return;
-
+  d.forEach(p=>{
     L.marker([p.lat,p.lng],{
-      icon:getIcon(p.category)
+      icon:icon(p.category)
     }).addTo(map);
   });
-}
-
-// ================= LOCAL =================
-function loadLocalPoints(){
-  getLocal().forEach(drawPoint);
-}
-
-function drawPoint(p){
-
-  if(!p.visible) return;
-
-  L.marker([p.lat,p.lng],{
-    icon:getIcon(p.category)
-  }).addTo(map)
-    .bindPopup(`${p.category}<br>${p.description}<br>${p.status}`);
 }
 
 // ================= MY POINTS =================
 function openMyPoints(){
 
-  const panel = document.getElementById("myPointsPanel");
-  panel.style.display="block";
+  const p=document.getElementById("myPointsPanel");
+  p.style.display="block";
 
-  const points = getLocal();
+  const list=getLocal();
 
-  panel.innerHTML = "<h3>Мои точки</h3>";
+  p.innerHTML="<h3>Мои точки</h3>";
 
-  points.forEach(p=>{
-    const div = document.createElement("div");
-    div.className="point-item";
+  list.forEach(x=>{
+    let div=document.createElement("div");
 
-    div.innerHTML = `
-      <b>${p.category}</b><br>
-      ${p.status}<br>
-      <button onclick="toggle(${p.id})">Показать / скрыть</button>
-      <button onclick="removePoint(${p.id})">Удалить</button>
+    div.innerHTML=`
+      <b>${x.category}</b><br>
+      ${x.status}<br>
+      <button onclick="edit(${x.id})">Редактировать</button>
+      <button onclick="remove(${x.id})">Удалить</button>
     `;
 
-    panel.appendChild(div);
+    p.appendChild(div);
   });
 }
 
-// ================= ACTIONS =================
-function toggle(id){
-  let points = getLocal();
-  points = points.map(p=>{
-    if(p.id===id) p.visible=!p.visible;
-    return p;
-  });
-  saveLocal(points);
-  location.reload();
+function edit(id){
+  alert("редактирование добавим следующим шагом");
 }
 
-function removePoint(id){
-  let points = getLocal().filter(p=>p.id!==id);
-  saveLocal(points);
+function remove(id){
+  let arr=getLocal().filter(x=>x.id!==id);
+  localStorage.setItem("points",JSON.stringify(arr));
   location.reload();
 }
 
 // ================= PANEL =================
 function openPanel(){
   document.getElementById("panel").style.display="block";
-  document.getElementById("coords").innerText =
-    current.lat.toFixed(5)+", "+current.lng.toFixed(5);
+  document.getElementById("coords").innerText=
+    current.lat.toFixed(5)+","+current.lng.toFixed(5);
 
-  photos = [];
+  photos=[];
   renderPhotos();
 }
 
@@ -410,10 +374,8 @@ function closePanel(){
   document.getElementById("panel").style.display="none";
 }
 
-// ================= START =================
 init();
 
 </script>
-
 </body>
 </html>
