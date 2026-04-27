@@ -13,6 +13,7 @@
 body { margin:0; font-family:Arial; }
 #map { height:100vh; }
 
+/* ================= MENU ================= */
 .menu {
   position:fixed;
   top:10px;
@@ -29,40 +30,50 @@ body { margin:0; font-family:Arial; }
   margin-bottom:5px;
 }
 
-/* PANEL (UBER STYLE) */
+/* ================= PANEL SYSTEM (NEW) ================= */
 .panel {
   position:fixed;
   left:0;
   right:0;
   bottom:0;
   background:#fff;
-  padding:15px;
-  border-radius:15px 15px 0 0;
+  border-radius:18px 18px 0 0;
   display:none;
   z-index:9999;
 
-  height:70vh;
+  height:33vh;            /* 1/3 экрана */
   max-height:95vh;
 
   overflow-y:auto;
   -webkit-overflow-scrolling: touch;
 
+  box-shadow:0 -10px 25px rgba(0,0,0,0.15);
+
   transition: height 0.2s ease;
 }
 
+/* drag handle */
 .drag-handle {
-  width:40px;
+  width:45px;
   height:5px;
   background:#ccc;
   border-radius:10px;
-  margin:0 auto 10px;
+  margin:10px auto;
 }
 
+/* collapsed state */
+.panel.collapsed {
+  height:55px !important;
+  overflow:hidden;
+}
+
+/* ================= CONTENT ================= */
 .row { margin-bottom:10px; }
 
 select, textarea, button {
   width:100%;
   padding:10px;
+  box-sizing:border-box;
 }
 
 .photos img {
@@ -71,11 +82,11 @@ select, textarea, button {
   object-fit:cover;
   margin:5px;
   border-radius:8px;
-  border:2px solid transparent;
 }
 
-.photos img:hover {
-  border:2px solid red;
+/* ================= MY PANEL ================= */
+#myPanel {
+  padding:10px;
 }
 </style>
 </head>
@@ -88,11 +99,13 @@ select, textarea, button {
   <button onclick="openMyPoints()">📂 Мои точки</button>
 </div>
 
+<!-- ================= CREATE / EDIT PANEL ================= -->
 <div class="panel" id="panel">
 
-  <div class="drag-handle"></div>
+  <div class="drag-handle" onclick="togglePanel('panel')"></div>
 
   <h3 id="panelTitle">📍 Новая точка</h3>
+
   <div id="coords"></div>
 
   <div class="row">
@@ -123,7 +136,10 @@ select, textarea, button {
 
 </div>
 
-<div class="panel" id="myPanel"></div>
+<!-- ================= MY POINTS PANEL ================= -->
+<div class="panel" id="myPanel">
+  <div class="drag-handle" onclick="togglePanel('myPanel')"></div>
+</div>
 
 <script>
 
@@ -140,6 +156,27 @@ let photos = [];
 
 let editMode = false;
 let editId = null;
+
+// ================= PANEL ENGINE (NEW) =================
+function openPanel(id){
+  const el = document.getElementById(id);
+  el.style.display = "block";
+  el.classList.remove("collapsed");
+}
+
+function closePanel(){
+  document.getElementById("panel").style.display = "none";
+  editMode = false;
+  editId = null;
+  photos = [];
+  renderPhotos();
+  document.getElementById("panelTitle").innerText = "📍 Новая точка";
+}
+
+function togglePanel(id){
+  const el = document.getElementById(id);
+  el.classList.toggle("collapsed");
+}
 
 // ================= ICONS =================
 const icons = {
@@ -176,7 +213,7 @@ function init(){
       color:"blue",
       fillColor:"blue",
       fillOpacity:1
-    }).addTo(map).bindPopup("Вы здесь");
+    }).addTo(map);
   });
 
   map.on("click", e=>{
@@ -186,7 +223,7 @@ function init(){
 
     tempMarker = L.marker(current,{icon: icon("рыбалка")}).addTo(map);
 
-    openPanel();
+    openPanel("panel");
   });
 
   fillCategories();
@@ -211,12 +248,11 @@ function fillCategories(){
   };
 }
 
-// ================= CAMERA =================
+// ================= PHOTO =================
 function requestCamera(){
   document.getElementById("camera").click();
 }
 
-// ================= PHOTO =================
 document.getElementById("camera").addEventListener("change", e=>{
   const file = e.target.files[0];
   if(!file) return;
@@ -250,14 +286,12 @@ function renderPhotos(){
 
 // ================= SAVE =================
 function saveDraft(){
-
   let arr = JSON.parse(localStorage.getItem("points") || "[]");
 
   if(editMode){
     arr = arr.map(p=>{
       if(p.id === editId){
-        return {
-          ...p,
+        return {...p,
           category:category.value,
           access:access.value,
           desc:desc.value,
@@ -285,8 +319,6 @@ function saveDraft(){
 
 // ================= PUBLISH =================
 function publish(){
-
-  if(!current) return;
 
   fetch(API,{
     method:"POST",
@@ -325,36 +357,27 @@ async function loadPoints(){
 function openMyPoints(){
 
   const box = document.getElementById("myPanel");
-  box.style.display = "block";
+  openPanel("myPanel");
+
   box.innerHTML = "<h3>📂 Мои точки</h3>";
 
   const arr = JSON.parse(localStorage.getItem("points") || "[]");
 
   arr.forEach(p=>{
-
     const div = document.createElement("div");
 
     div.innerHTML = `
       <hr>
-      <div onclick="goToPoint(${p.lat}, ${p.lng})" style="cursor:pointer">
-        <b>${icons[p.category]} ${p.category}</b><br>
-        📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
-        📝 ${p.desc || ""}<br>
-        <div>${(p.photos||[]).map(ph=>`<img src="${ph}" width="50">`).join("")}</div>
-      </div>
-
+      <b>${icons[p.category]} ${p.category}</b><br>
+      📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
+      📝 ${p.desc || ""}<br>
+      <div>${(p.photos||[]).map(ph=>`<img src="${ph}" width="50">`).join("")}</div>
       <button onclick="editPoint(${p.id})">✏️ Изменить</button>
-      <button onclick="publishPoint(${p.id})">🚀 Опубликовать</button>
       <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
     `;
 
     box.appendChild(div);
   });
-}
-
-// ================= MAP FOCUS =================
-function goToPoint(lat,lng){
-  map.setView([lat,lng],15);
 }
 
 // ================= EDIT =================
@@ -363,39 +386,36 @@ function editPoint(id){
   const arr = JSON.parse(localStorage.getItem("points") || "[]");
   const p = arr.find(x=>x.id === id);
 
-  if(!p) return;
-
   editMode = true;
   editId = id;
 
-  current = {lat:p.lat,lng:p.lng};
+  current = {lat:p.lat, lng:p.lng};
+
+  if(tempMarker) map.removeLayer(tempMarker);
+
+  tempMarker = L.marker(current,{icon: icon(p.category)}).addTo(map);
 
   photos = [...(p.photos||[])];
 
   category.value = p.category;
   access.value = p.access;
-  desc.value = p.desc;
+  desc.value = p.desc || "";
 
   renderPhotos();
 
   document.getElementById("panelTitle").innerText = "✏️ Редактирование";
 
-  openPanel();
+  openPanel("panel");
 }
 
-// ================= PANEL =================
-function openPanel(){
-  panel.style.display="block";
-  coords.innerText = current.lat.toFixed(5)+", "+current.lng.toFixed(5);
-}
+// ================= DELETE =================
+function deletePoint(id){
 
-function closePanel(){
-  panel.style.display="none";
-  editMode=false;
-  editId=null;
-  photos=[];
-  renderPhotos();
-  document.getElementById("panelTitle").innerText="📍 Новая точка";
+  let arr = JSON.parse(localStorage.getItem("points") || "[]");
+  arr = arr.filter(x=>x.id !== id);
+
+  localStorage.setItem("points", JSON.stringify(arr));
+  openMyPoints();
 }
 
 init();
