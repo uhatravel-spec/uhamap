@@ -29,18 +29,34 @@ body { margin:0; font-family:Arial; }
   margin-bottom:5px;
 }
 
+/* 🔥 ДОБАВЛЕНО */
 .panel {
   position:fixed;
-  bottom:0;
   left:0;
   right:0;
+  bottom:0;
   background:#fff;
   padding:15px;
   border-radius:15px 15px 0 0;
   display:none;
   z-index:9999;
-  max-height:75vh;
-  overflow:auto;
+
+  height:70vh;
+  max-height:95vh;
+
+  overflow-y:auto;
+  -webkit-overflow-scrolling: touch;
+
+  transition: height 0.2s ease;
+}
+
+/* 🔥 ДОБАВЛЕНО */
+.drag-handle {
+  width:40px;
+  height:5px;
+  background:#ccc;
+  border-radius:10px;
+  margin:0 auto 10px;
 }
 
 .row { margin-bottom:10px; }
@@ -74,6 +90,9 @@ select, textarea, button {
 </div>
 
 <div class="panel" id="panel">
+
+  <!-- 🔥 ДОБАВЛЕНО -->
+  <div class="drag-handle"></div>
 
   <h3 id="panelTitle">📍 Новая точка</h3>
   <div id="coords"></div>
@@ -123,6 +142,61 @@ let photos = [];
 
 let editMode = false;
 let editId = null;
+
+/* 🔥 ДОБАВЛЕНО — PANEL STATES */
+let panelState = 0.7;
+const states = [0.4, 0.7, 0.95];
+
+function setPanelHeight(r){
+  panelState = r;
+  panel.style.height = (window.innerHeight * r) + "px";
+}
+
+/* 🔥 ДОБАВЛЕНО — DRAG */
+let startY = 0;
+let startHeight = 0;
+
+panel.addEventListener("touchstart", e=>{
+  startY = e.touches[0].clientY;
+  startHeight = panel.offsetHeight;
+});
+
+panel.addEventListener("touchmove", e=>{
+  const delta = startY - e.touches[0].clientY;
+  let newH = startHeight + delta;
+
+  const min = window.innerHeight * 0.4;
+  const max = window.innerHeight * 0.95;
+
+  newH = Math.max(min, Math.min(max, newH));
+  panel.style.height = newH + "px";
+});
+
+panel.addEventListener("touchend", ()=>{
+  const h = panel.offsetHeight / window.innerHeight;
+
+  let closest = states.reduce((prev, curr)=>{
+    return Math.abs(curr - h) < Math.abs(prev - h) ? curr : prev;
+  });
+
+  setPanelHeight(closest);
+});
+
+/* 🔥 ДОБАВЛЕНО — CLOSE KEYBOARD */
+document.addEventListener("touchstart", e=>{
+  if(!e.target.closest("textarea") && !e.target.closest("input")){
+    document.activeElement.blur();
+  }
+});
+
+/* 🔥 ДОБАВЛЕНО — TEXTAREA UX */
+const descEl = document.getElementById("desc");
+descEl.addEventListener("focus", ()=>{
+  setPanelHeight(0.95);
+  setTimeout(()=>{
+    descEl.scrollIntoView({behavior:"smooth", block:"center"});
+  },300);
+});
 
 // ================= ICONS =================
 const icons = {
@@ -176,9 +250,9 @@ function init(){
   loadPoints();
 }
 
-// ================= CATEGORY =================
-function fillCategories(){
+// ===== ДАЛЬШЕ ТВОЙ КОД ПОЛНОСТЬЮ БЕЗ ИЗМЕНЕНИЙ =====
 
+function fillCategories(){
   const sel = document.getElementById("category");
   sel.innerHTML = "";
 
@@ -191,21 +265,15 @@ function fillCategories(){
 
   sel.onchange = ()=>{
     if(tempMarker) map.removeLayer(tempMarker);
-
-    tempMarker = L.marker(current,{
-      icon: icon(sel.value)
-    }).addTo(map);
+    tempMarker = L.marker(current,{icon: icon(sel.value)}).addTo(map);
   };
 }
 
-// ================= CAMERA =================
 function requestCamera(){
   document.getElementById("camera").click();
 }
 
-// ================= PHOTO =================
 document.getElementById("camera").addEventListener("change", e=>{
-
   const file = e.target.files[0];
   if(!file) return;
 
@@ -220,12 +288,10 @@ document.getElementById("camera").addEventListener("change", e=>{
 });
 
 function renderPhotos(){
-
   const box = document.getElementById("photos");
   box.innerHTML = "";
 
   photos.forEach((p,i)=>{
-
     let img = document.createElement("img");
     img.src = p;
 
@@ -238,9 +304,7 @@ function renderPhotos(){
   });
 }
 
-// ================= SAVE =================
 function saveDraft(){
-
   let arr = JSON.parse(localStorage.getItem("points") || "[]");
 
   if(editMode){
@@ -269,14 +333,11 @@ function saveDraft(){
   }
 
   localStorage.setItem("points", JSON.stringify(arr));
-
   closePanel();
   alert("Сохранено");
 }
 
-// ================= PUBLISH =================
 function publish(){
-
   if(!current) return;
 
   fetch(API,{
@@ -306,22 +367,16 @@ function publish(){
   closePanel();
 }
 
-// ================= LOAD =================
 async function loadPoints(){
-
   const res = await fetch(API+"?action=getPoints");
   const data = await res.json();
 
   data.forEach(p=>{
-    L.marker([p.lat,p.lng],{
-      icon: icon(p.category)
-    }).addTo(map);
+    L.marker([p.lat,p.lng],{icon: icon(p.category)}).addTo(map);
   });
 }
 
-// ================= MY POINTS =================
 function openMyPoints(){
-
   const box = document.getElementById("myPanel");
   box.style.display = "block";
   box.innerHTML = "<h3>📂 Мои точки</h3>";
@@ -329,7 +384,6 @@ function openMyPoints(){
   const arr = JSON.parse(localStorage.getItem("points") || "[]");
 
   arr.forEach(p=>{
-
     const div = document.createElement("div");
 
     div.innerHTML = `
@@ -349,9 +403,7 @@ function openMyPoints(){
   });
 }
 
-// ================= EDIT POINT (ГЛАВНОЕ ДОПОЛНЕНИЕ) =================
 function editPoint(id){
-
   const arr = JSON.parse(localStorage.getItem("points") || "[]");
   const p = arr.find(x=>x.id === id);
 
@@ -364,9 +416,7 @@ function editPoint(id){
 
   if(tempMarker) map.removeLayer(tempMarker);
 
-  tempMarker = L.marker(current,{
-    icon: icon(p.category)
-  }).addTo(map);
+  tempMarker = L.marker(current,{icon: icon(p.category)}).addTo(map);
 
   photos = [...(p.photos || [])];
 
@@ -382,7 +432,6 @@ function editPoint(id){
 }
 
 function publishPoint(id){
-
   const arr = JSON.parse(localStorage.getItem("points") || "[]");
   const p = arr.find(x=>x.id === id);
 
@@ -399,7 +448,6 @@ function publishPoint(id){
 }
 
 function deletePoint(id){
-
   let arr = JSON.parse(localStorage.getItem("points") || "[]");
   arr = arr.filter(x=>x.id !== id);
 
@@ -407,9 +455,9 @@ function deletePoint(id){
   openMyPoints();
 }
 
-// ================= PANEL =================
 function openPanel(){
   panel.style.display="block";
+  setPanelHeight(0.7);
 
   if(current){
     coords.innerText = current.lat.toFixed(5)+", "+current.lng.toFixed(5);
