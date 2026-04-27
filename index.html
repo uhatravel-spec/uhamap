@@ -36,11 +36,14 @@ body { margin:0; font-family:Arial; }
   right:0;
   background:#fff;
   padding:15px;
-  border-radius:15px 15px 0 0;
+  border-radius:20px 20px 0 0;
   display:none;
   z-index:9999;
-  max-height:75vh;
+  height:33vh;
+  max-height:90vh;
   overflow:auto;
+  box-shadow:0 -5px 20px rgba(0,0,0,0.2);
+  transition:height 0.2s ease;
 }
 
 .row { margin-bottom:10px; }
@@ -69,6 +72,7 @@ select, textarea, button {
 </div>
 
 <div class="panel" id="panel">
+  <div id="toggleBtn" style="text-align:center;font-size:24px;cursor:pointer;">—</div>
 
   <h3>📍 Новая точка</h3>
   <div id="coords"></div>
@@ -98,7 +102,6 @@ select, textarea, button {
   <button onclick="saveDraft()">Сохранить (локально)</button>
   <button onclick="publish()">Опубликовать</button>
   <button onclick="closePanel()">Закрыть</button>
-
 </div>
 
 <div class="panel" id="myPanel"></div>
@@ -115,6 +118,11 @@ let current = null;
 let tempMarker = null;
 let userMarker = null;
 let photos = [];
+
+// PANEL STATE
+const panelEl = document.getElementById("panel");
+const STATES = [0.33, 0.66, 0.9];
+let stateIndex = 0;
 
 // ================= ICONS =================
 const icons = {
@@ -166,7 +174,66 @@ function init(){
 
   fillCategories();
   loadPoints();
+
+  setTimeout(()=>{
+    PointStore.sync();
+  },500);
 }
+
+// ================= PANEL =================
+function setPanel(h){
+  panelEl.style.height = (window.innerHeight * h) + "px";
+}
+
+function openPanel(){
+  panelEl.style.display="block";
+  setPanel(0.33);
+
+  if(current){
+    coords.innerText = current.lat.toFixed(5)+", "+current.lng.toFixed(5);
+  }
+}
+
+function closePanel(){
+  panelEl.style.display="none";
+}
+
+// toggle
+document.getElementById("toggleBtn").onclick = ()=>{
+  stateIndex = (stateIndex + 1) % STATES.length;
+  setPanel(STATES[stateIndex]);
+};
+
+// ================= DRAG =================
+let startY = 0;
+let startH = 0;
+
+panelEl.addEventListener("touchstart", e=>{
+  startY = e.touches[0].clientY;
+  startH = panelEl.offsetHeight;
+});
+
+panelEl.addEventListener("touchmove", e=>{
+  let delta = startY - e.touches[0].clientY;
+  let h = startH + delta;
+
+  const min = window.innerHeight * 0.33;
+  const max = window.innerHeight * 0.9;
+
+  h = Math.max(min, Math.min(max, h));
+  panelEl.style.height = h + "px";
+});
+
+// ================= KEYBOARD FIX =================
+document.addEventListener("touchstart", e=>{
+  if(!e.target.closest("textarea")){
+    document.activeElement.blur();
+  }
+});
+
+document.getElementById("desc").addEventListener("focus", ()=>{
+  setPanel(0.9);
+});
 
 // ================= CATEGORY =================
 function fillCategories(){
@@ -186,7 +253,7 @@ function fillCategories(){
   };
 }
 
-// ================= CAMERA =================
+// ================= PHOTO =================
 function requestCamera(){
   document.getElementById("camera").click();
 }
@@ -222,286 +289,49 @@ function renderPhotos(){
 
 // ================= SAVE =================
 function saveDraft(){
-
-  const arr = JSON.parse(localStorage.getItem("points") || "[]");
+  let arr = JSON.parse(localStorage.getItem("points") || "[]");
 
   arr.push({
     id:Date.now(),
     lat:current.lat,
     lng:current.lng,
-    category:document.getElementById("category").value,
-    access:document.getElementById("access").value,
-    desc:document.getElementById("desc").value,
+    category:category.value,
+    access:access.value,
+    desc:desc.value,
     photos,
     status:"draft"
   });
 
   localStorage.setItem("points", JSON.stringify(arr));
+
+  PointStore.sync();
+
   closePanel();
-  alert("Сохранено локально");
-
-  PointStore.sync(); // 🔥 ADD
 }
 
-// ================= PUBLISH =================
-function publish(){
-
-  fetch(API,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      action:"savePoint",
-      data:{
-        lat:current.lat,
-        lng:current.lng,
-        category:document.getElementById("category").value,
-        access:document.getElementById("access").value,
-        description:document.getElementById("desc").value,
-        photos,
-        user_id:tg.initDataUnsafe?.user?.id,
-        user_name:tg.initDataUnsafe?.user?.first_name
-      }
-    })
-  });
-
-  alert("Отправлено на модерацию");
-  closePanel();
-
-  PointStore.sync(); // 🔥 ADD
-}
-
-// ================= LOAD =================
-async function loadPoints(){
-  const res = await fetch(API+"?action=getPoints");
-  const data = await res.json();
-
-  data.forEach(p=>{
-    L.marker([p.lat,p.lng],{
-      icon: icon(p.category)
-    }).addTo(map);
-  });
-}
-
-// ================= MY POINTS =================
-function openMyPoints(){
-
-  const box = document.getElementById("myPanel");
-  box.style.display = "block";
-  box.innerHTML = "<h3>📂 Мои точки</h3>";
-
-  const arr = JSON.parse(localStorage.getItem("points") || "[]");
-
-  arr.forEach(p=>{
-    const div = document.createElement("div");
-
-    div.innerHTML = `
-      <hr>
-      <b>${p.category}</b><br>
-      ${p.desc || ""}<br>
-
-      <button onclick="focusPoint(${p.lat},${p.lng})">📍 Показать</button>
-      <button onclick="editPoint(${p.id})">✏️ Изменить</button>
-      <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
-    `;
-
-    box.appendChild(div);
-  });
-}
-
-function focusPoint(lat,lng){
-  map.setView([lat,lng],15);
-}
-
-function editPoint(id){
-  const arr = JSON.parse(localStorage.getItem("points") || "[]");
-  const p = arr.find(x=>x.id === id);
-
-  if(!p) return;
-
-  current = {lat:p.lat,lng:p.lng};
-
-  document.getElementById("category").value = p.category;
-  document.getElementById("access").value = p.access;
-  document.getElementById("desc").value = p.desc;
-
-  photos = p.photos || [];
-  renderPhotos();
-
-  openPanel();
-
-  map.setView([p.lat,p.lng],15);
-}
-
-function deletePoint(id){
-  let arr = JSON.parse(localStorage.getItem("points") || "[]");
-  arr = arr.filter(x=>x.id !== id);
-
-  localStorage.setItem("points", JSON.stringify(arr));
-
-  PointStore.sync(); // 🔥 ADD
-
-  openMyPoints();
-}
-
-// ================= PANEL =================
-function openPanel(){
-  panel.style.display="block";
-
-  if(current){
-    coords.innerText = current.lat.toFixed(5)+", "+current.lng.toFixed(5);
-  }
-}
-
-function closePanel(){
-  panel.style.display="none";
-}
-
-// ================= POINT STORE (NEW SYSTEM) =================
+// ================= STORE =================
 const PointStore = {
-
   sync(){
     const points = JSON.parse(localStorage.getItem("points") || "[]");
 
-    if(window._pointLayer){
-      window._pointLayer.clearLayers();
+    if(window.layer){
+      window.layer.clearLayers();
     } else {
-      window._pointLayer = L.layerGroup().addTo(map);
+      window.layer = L.layerGroup().addTo(map);
     }
 
     points.forEach(p=>{
-      const m = L.marker([p.lat,p.lng],{
-        icon: icon(p.category)
-      });
-
+      const m = L.marker([p.lat,p.lng],{icon: icon(p.category)});
       m.on("click", ()=>{
+        map.setView([p.lat,p.lng],15,{animate:true});
         openPanel();
-        map.setView([p.lat,p.lng],15);
       });
-
-      window._pointLayer.addLayer(m);
+      window.layer.addLayer(m);
     });
   }
 };
-// ================= PANEL UX FIX (НЕ УДАЛЯЕТ ТВОЙ КОД) =================
 
-const panelEl = document.getElementById("panel");
-
-// состояния панели (золотое сечение примерно)
-const PANEL_STATES = [0.3, 0.6, 0.9];
-let currentState = 1;
-
-// применить высоту
-function applyPanelState(index){
-  currentState = index;
-  const h = window.innerHeight * PANEL_STATES[index];
-  panelEl.style.height = h + "px";
-}
-
-// открыть нормально
-function openPanel(){
-  panelEl.style.display = "block";
-  applyPanelState(1); // 60%
-}
-
-// свернуть
-function collapsePanel(){
-  applyPanelState(0);
-}
-
-// развернуть
-function expandPanel(){
-  applyPanelState(2);
-}
-
-// ================= DRAG =================
-let startY = 0;
-let startHeight = 0;
-
-panelEl.addEventListener("touchstart", e=>{
-  startY = e.touches[0].clientY;
-  startHeight = panelEl.offsetHeight;
-});
-
-panelEl.addEventListener("touchmove", e=>{
-  const delta = startY - e.touches[0].clientY;
-  let newHeight = startHeight + delta;
-
-  const min = window.innerHeight * 0.3;
-  const max = window.innerHeight * 0.9;
-
-  newHeight = Math.max(min, Math.min(max, newHeight));
-  panelEl.style.height = newHeight + "px";
-});
-
-panelEl.addEventListener("touchend", ()=>{
-  const ratio = panelEl.offsetHeight / window.innerHeight;
-
-  let closest = 0;
-  let diff = Infinity;
-
-  PANEL_STATES.forEach((s,i)=>{
-    const d = Math.abs(s - ratio);
-    if(d < diff){
-      diff = d;
-      closest = i;
-    }
-  });
-
-  applyPanelState(closest);
-});
-
-// ================= КЛАВИАТУРА FIX =================
-
-// клик вне input → закрыть клавиатуру
-document.addEventListener("touchstart", e=>{
-  if(!e.target.closest("textarea") && !e.target.closest("input")){
-    document.activeElement.blur();
-  }
-});
-
-// textarea фокус
-const textarea = document.getElementById("desc");
-
-textarea.addEventListener("focus", ()=>{
-  applyPanelState(2); // расширить
-
-  setTimeout(()=>{
-    textarea.scrollIntoView({
-      behavior: "smooth",
-      block: "center"
-    });
-  }, 300);
-});
-
-// ================= КНОПКА СВОРАЧИВАНИЯ =================
-
-// добавляем кнопку в панель (если нет)
-const toggleBtn = document.createElement("div");
-toggleBtn.innerHTML = "—";
-toggleBtn.style.textAlign = "center";
-toggleBtn.style.fontSize = "24px";
-toggleBtn.style.cursor = "pointer";
-toggleBtn.style.marginBottom = "5px";
-
-panelEl.prepend(toggleBtn);
-
-let collapsed = false;
-
-toggleBtn.onclick = ()=>{
-  if(collapsed){
-    applyPanelState(1);
-    collapsed = false;
-  } else {
-    applyPanelState(0);
-    collapsed = true;
-  }
-};
-// ================= INIT =================
 init();
-
-setTimeout(()=>{
-  PointStore.sync();
-},800);
 
 </script>
 </body>
