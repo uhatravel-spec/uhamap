@@ -74,7 +74,7 @@ select, textarea, button {
 <div class="panel" id="panel">
   <div id="toggleBtn" style="text-align:center;font-size:24px;cursor:pointer;">—</div>
 
-  <h3>📍 Новая точка</h3>
+  <h3 id="panelTitle">📍 Новая точка</h3>
   <div id="coords"></div>
 
   <div class="row">
@@ -119,10 +119,25 @@ let tempMarker = null;
 let userMarker = null;
 let photos = [];
 
+let editMode = false;
+let editId = null;
+
 // PANEL STATE
 const panelEl = document.getElementById("panel");
 const STATES = [0.33, 0.66, 0.9];
 let stateIndex = 0;
+
+// ====== СМЕЩЕНИЕ КАРТЫ (ГЛАВНОЕ) ======
+function setMapFocus(lat, lng){
+  const yOffset = window.innerHeight / 6;
+
+  const point = map.project([lat, lng], map.getZoom());
+  const newPoint = L.point(point.x, point.y - yOffset);
+
+  const newLatLng = map.unproject(newPoint, map.getZoom());
+
+  map.setView(newLatLng, 15, {animate:true});
+}
 
 // ================= ICONS =================
 const icons = {
@@ -196,6 +211,8 @@ function openPanel(){
 
 function closePanel(){
   panelEl.style.display="none";
+  editMode = false;
+  editId = null;
 }
 
 // toggle
@@ -203,37 +220,6 @@ document.getElementById("toggleBtn").onclick = ()=>{
   stateIndex = (stateIndex + 1) % STATES.length;
   setPanel(STATES[stateIndex]);
 };
-
-// ================= DRAG =================
-let startY = 0;
-let startH = 0;
-
-panelEl.addEventListener("touchstart", e=>{
-  startY = e.touches[0].clientY;
-  startH = panelEl.offsetHeight;
-});
-
-panelEl.addEventListener("touchmove", e=>{
-  let delta = startY - e.touches[0].clientY;
-  let h = startH + delta;
-
-  const min = window.innerHeight * 0.33;
-  const max = window.innerHeight * 0.9;
-
-  h = Math.max(min, Math.min(max, h));
-  panelEl.style.height = h + "px";
-});
-
-// ================= KEYBOARD FIX =================
-document.addEventListener("touchstart", e=>{
-  if(!e.target.closest("textarea")){
-    document.activeElement.blur();
-  }
-});
-
-document.getElementById("desc").addEventListener("focus", ()=>{
-  setPanel(0.9);
-});
 
 // ================= CATEGORY =================
 function fillCategories(){
@@ -246,11 +232,6 @@ function fillCategories(){
     o.innerHTML = `${icons[c]} ${c}`;
     sel.appendChild(o);
   });
-
-  sel.onchange = ()=>{
-    if(tempMarker) map.removeLayer(tempMarker);
-    tempMarker = L.marker(current,{icon: icon(sel.value)}).addTo(map);
-  };
 }
 
 // ================= PHOTO =================
@@ -291,22 +272,96 @@ function renderPhotos(){
 function saveDraft(){
   let arr = JSON.parse(localStorage.getItem("points") || "[]");
 
-  arr.push({
-    id:Date.now(),
-    lat:current.lat,
-    lng:current.lng,
-    category:category.value,
-    access:access.value,
-    desc:desc.value,
-    photos,
-    status:"draft"
-  });
+  if(editMode){
+    arr = arr.map(p=>{
+      if(p.id === editId){
+        return {...p,
+          category:category.value,
+          access:access.value,
+          desc:desc.value,
+          photos
+        };
+      }
+      return p;
+    });
+  } else {
+    arr.push({
+      id:Date.now(),
+      lat:current.lat,
+      lng:current.lng,
+      category:category.value,
+      access:access.value,
+      desc:desc.value,
+      photos,
+      status:"draft"
+    });
+  }
 
   localStorage.setItem("points", JSON.stringify(arr));
-
   PointStore.sync();
-
   closePanel();
+}
+
+// ================= MY POINTS =================
+function openMyPoints(){
+
+  const box = document.getElementById("myPanel");
+  box.style.display = "block";
+  box.innerHTML = "<h3>📂 Мои точки</h3>";
+
+  const arr = JSON.parse(localStorage.getItem("points") || "[]");
+
+  arr.forEach(p=>{
+    const div = document.createElement("div");
+
+    div.innerHTML = `
+      <hr>
+      <b>${p.category}</b><br>
+      ${p.desc || ""}<br>
+
+      <button onclick="focusPoint(${p.lat},${p.lng})">📍 Показать</button>
+      <button onclick="editPoint(${p.id})">✏️ Изменить</button>
+      <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
+    `;
+
+    box.appendChild(div);
+  });
+}
+
+function focusPoint(lat,lng){
+  setMapFocus(lat,lng);
+}
+
+// ================= EDIT =================
+function editPoint(id){
+  const arr = JSON.parse(localStorage.getItem("points") || "[]");
+  const p = arr.find(x=>x.id === id);
+
+  if(!p) return;
+
+  editMode = true;
+  editId = id;
+
+  current = {lat:p.lat,lng:p.lng};
+
+  category.value = p.category;
+  access.value = p.access;
+  desc.value = p.desc;
+
+  photos = p.photos || [];
+  renderPhotos();
+
+  setMapFocus(p.lat,p.lng);
+  openPanel();
+}
+
+function deletePoint(id){
+  let arr = JSON.parse(localStorage.getItem("points") || "[]");
+  arr = arr.filter(x=>x.id !== id);
+
+  localStorage.setItem("points", JSON.stringify(arr));
+  PointStore.sync();
+  openMyPoints();
 }
 
 // ================= STORE =================
@@ -322,10 +377,21 @@ const PointStore = {
 
     points.forEach(p=>{
       const m = L.marker([p.lat,p.lng],{icon: icon(p.category)});
+
       m.on("click", ()=>{
-        map.setView([p.lat,p.lng],15,{animate:true});
+        current = {lat:p.lat,lng:p.lng};
+
+        category.value = p.category;
+        access.value = p.access;
+        desc.value = p.desc || "";
+
+        photos = p.photos || [];
+        renderPhotos();
+
+        setMapFocus(p.lat,p.lng);
         openPanel();
       });
+
       window.layer.addLayer(m);
     });
   }
