@@ -56,6 +56,11 @@ select, textarea, button {
   object-fit:cover;
   margin:5px;
   border-radius:8px;
+  border:2px solid transparent;
+}
+
+.photos img:hover {
+  border:2px solid red;
 }
 </style>
 </head>
@@ -70,7 +75,7 @@ select, textarea, button {
 
 <div class="panel" id="panel">
 
-  <h3>📍 Новая точка</h3>
+  <h3 id="panelTitle">📍 Новая точка</h3>
   <div id="coords"></div>
 
   <div class="row">
@@ -116,6 +121,9 @@ let tempMarker = null;
 let userMarker = null;
 let photos = [];
 
+let editMode = false;
+let editId = null;
+
 // ================= ICONS =================
 const icons = {
   "рыбалка":"🎣",
@@ -141,11 +149,9 @@ function init(){
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-  // 🔵 BLUE LOCATION DOT (FIX)
   map.locate({setView:true, watch:true});
 
   map.on("locationfound", e=>{
-
     if(userMarker) map.removeLayer(userMarker);
 
     userMarker = L.circleMarker(e.latlng,{
@@ -184,7 +190,6 @@ function fillCategories(){
   });
 
   sel.onchange = ()=>{
-
     if(tempMarker) map.removeLayer(tempMarker);
 
     tempMarker = L.marker(current,{
@@ -193,7 +198,7 @@ function fillCategories(){
   };
 }
 
-// ================= CAMERA FIX =================
+// ================= CAMERA =================
 function requestCamera(){
   document.getElementById("camera").click();
 }
@@ -233,30 +238,46 @@ function renderPhotos(){
   });
 }
 
-// ================= SAVE LOCAL =================
+// ================= SAVE =================
 function saveDraft(){
 
-  const arr = JSON.parse(localStorage.getItem("points") || "[]");
+  let arr = JSON.parse(localStorage.getItem("points") || "[]");
 
-  arr.push({
-    id:Date.now(),
-    lat:current.lat,
-    lng:current.lng,
-    category:document.getElementById("category").value,
-    access:document.getElementById("access").value,
-    desc:document.getElementById("desc").value,
-    photos,
-    status:"draft"
-  });
+  if(editMode){
+    arr = arr.map(p=>{
+      if(p.id === editId){
+        return {...p,
+          category:category.value,
+          access:access.value,
+          desc:desc.value,
+          photos
+        };
+      }
+      return p;
+    });
+  } else {
+    arr.push({
+      id:Date.now(),
+      lat:current.lat,
+      lng:current.lng,
+      category:category.value,
+      access:access.value,
+      desc:desc.value,
+      photos,
+      status:"draft"
+    });
+  }
 
   localStorage.setItem("points", JSON.stringify(arr));
 
   closePanel();
-  alert("Сохранено локально");
+  alert("Сохранено");
 }
 
 // ================= PUBLISH =================
 function publish(){
+
+  if(!current) return;
 
   fetch(API,{
     method:"POST",
@@ -266,9 +287,9 @@ function publish(){
       data:{
         lat:current.lat,
         lng:current.lng,
-        category:document.getElementById("category").value,
-        access:document.getElementById("access").value,
-        description:document.getElementById("desc").value,
+        category:category.value,
+        access:access.value,
+        description:desc.value,
         photos,
         user_id:tg.initDataUnsafe?.user?.id,
         user_name:tg.initDataUnsafe?.user?.first_name
@@ -277,6 +298,11 @@ function publish(){
   });
 
   alert("Отправлено на модерацию");
+
+  if(editMode){
+    deletePoint(editId);
+  }
+
   closePanel();
 }
 
@@ -298,19 +324,70 @@ function openMyPoints(){
 
   const box = document.getElementById("myPanel");
   box.style.display = "block";
-  box.innerHTML = "<h3>Мои точки</h3>";
+  box.innerHTML = "<h3>📂 Мои точки</h3>";
 
   const arr = JSON.parse(localStorage.getItem("points") || "[]");
 
   arr.forEach(p=>{
+
     const div = document.createElement("div");
+
     div.innerHTML = `
-      <b>${p.category}</b><br>
-      ${p.desc || ""}<br>
-      <button onclick="deletePoint(${p.id})">Удалить</button>
+      <hr>
+      <b>${icons[p.category]} ${p.category}</b><br>
+      📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
+      🚗 ${p.access}<br>
+      📝 ${p.desc || ""}<br>
+      📊 ${p.status}<br>
+      <div>${(p.photos||[]).map(ph=>`<img src="${ph}" width="50">`).join("")}</div>
+      <button onclick="editPoint(${p.id})">✏️ Изменить</button>
+      <button onclick="publishPoint(${p.id})">🚀 Опубликовать</button>
+      <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
     `;
+
     box.appendChild(div);
   });
+}
+
+function editPoint(id){
+
+  const arr = JSON.parse(localStorage.getItem("points") || "[]");
+  const p = arr.find(x=>x.id === id);
+
+  if(!p) return;
+
+  editMode = true;
+  editId = id;
+
+  current = {lat:p.lat, lng:p.lng};
+  photos = [...p.photos];
+
+  category.value = p.category;
+  access.value = p.access;
+  desc.value = p.desc;
+
+  renderPhotos();
+
+  document.getElementById("panelTitle").innerText = "✏️ Редактирование";
+
+  openPanel();
+}
+
+function publishPoint(id){
+
+  const arr = JSON.parse(localStorage.getItem("points") || "[]");
+  const p = arr.find(x=>x.id === id);
+
+  if(!p) return;
+
+  current = {lat:p.lat, lng:p.lng};
+  photos = [...p.photos];
+
+  category.value = p.category;
+  access.value = p.access;
+  desc.value = p.desc;
+
+  publish();
 }
 
 function deletePoint(id){
@@ -326,12 +403,15 @@ function deletePoint(id){
 function openPanel(){
   panel.style.display="block";
   coords.innerText = current.lat.toFixed(5)+", "+current.lng.toFixed(5);
-  photos=[];
-  renderPhotos();
 }
 
 function closePanel(){
   panel.style.display="none";
+  editMode = false;
+  editId = null;
+  photos = [];
+  renderPhotos();
+  document.getElementById("panelTitle").innerText = "📍 Новая точка";
 }
 
 init();
