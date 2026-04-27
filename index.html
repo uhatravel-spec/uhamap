@@ -382,7 +382,120 @@ const PointStore = {
     });
   }
 };
+// ================= PANEL UX FIX (НЕ УДАЛЯЕТ ТВОЙ КОД) =================
 
+const panelEl = document.getElementById("panel");
+
+// состояния панели (золотое сечение примерно)
+const PANEL_STATES = [0.3, 0.6, 0.9];
+let currentState = 1;
+
+// применить высоту
+function applyPanelState(index){
+  currentState = index;
+  const h = window.innerHeight * PANEL_STATES[index];
+  panelEl.style.height = h + "px";
+}
+
+// открыть нормально
+function openPanel(){
+  panelEl.style.display = "block";
+  applyPanelState(1); // 60%
+}
+
+// свернуть
+function collapsePanel(){
+  applyPanelState(0);
+}
+
+// развернуть
+function expandPanel(){
+  applyPanelState(2);
+}
+
+// ================= DRAG =================
+let startY = 0;
+let startHeight = 0;
+
+panelEl.addEventListener("touchstart", e=>{
+  startY = e.touches[0].clientY;
+  startHeight = panelEl.offsetHeight;
+});
+
+panelEl.addEventListener("touchmove", e=>{
+  const delta = startY - e.touches[0].clientY;
+  let newHeight = startHeight + delta;
+
+  const min = window.innerHeight * 0.3;
+  const max = window.innerHeight * 0.9;
+
+  newHeight = Math.max(min, Math.min(max, newHeight));
+  panelEl.style.height = newHeight + "px";
+});
+
+panelEl.addEventListener("touchend", ()=>{
+  const ratio = panelEl.offsetHeight / window.innerHeight;
+
+  let closest = 0;
+  let diff = Infinity;
+
+  PANEL_STATES.forEach((s,i)=>{
+    const d = Math.abs(s - ratio);
+    if(d < diff){
+      diff = d;
+      closest = i;
+    }
+  });
+
+  applyPanelState(closest);
+});
+
+// ================= КЛАВИАТУРА FIX =================
+
+// клик вне input → закрыть клавиатуру
+document.addEventListener("touchstart", e=>{
+  if(!e.target.closest("textarea") && !e.target.closest("input")){
+    document.activeElement.blur();
+  }
+});
+
+// textarea фокус
+const textarea = document.getElementById("desc");
+
+textarea.addEventListener("focus", ()=>{
+  applyPanelState(2); // расширить
+
+  setTimeout(()=>{
+    textarea.scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
+  }, 300);
+});
+
+// ================= КНОПКА СВОРАЧИВАНИЯ =================
+
+// добавляем кнопку в панель (если нет)
+const toggleBtn = document.createElement("div");
+toggleBtn.innerHTML = "—";
+toggleBtn.style.textAlign = "center";
+toggleBtn.style.fontSize = "24px";
+toggleBtn.style.cursor = "pointer";
+toggleBtn.style.marginBottom = "5px";
+
+panelEl.prepend(toggleBtn);
+
+let collapsed = false;
+
+toggleBtn.onclick = ()=>{
+  if(collapsed){
+    applyPanelState(1);
+    collapsed = false;
+  } else {
+    applyPanelState(0);
+    collapsed = true;
+  }
+};
 // ================= INIT =================
 init();
 
