@@ -349,6 +349,7 @@ function openMyPoints(){
   });
 }
 
+// ================= EDIT POINT (ГЛАВНОЕ ДОПОЛНЕНИЕ) =================
 function editPoint(id){
 
   const arr = JSON.parse(localStorage.getItem("points") || "[]");
@@ -360,15 +361,22 @@ function editPoint(id){
   editId = id;
 
   current = {lat:p.lat, lng:p.lng};
-  photos = [...p.photos];
+
+  if(tempMarker) map.removeLayer(tempMarker);
+
+  tempMarker = L.marker(current,{
+    icon: icon(p.category)
+  }).addTo(map);
+
+  photos = [...(p.photos || [])];
 
   category.value = p.category;
   access.value = p.access;
-  desc.value = p.desc;
+  desc.value = p.desc || "";
 
   renderPhotos();
 
-  document.getElementById("panelTitle").innerText = "✏️ Редактирование";
+  document.getElementById("panelTitle").innerText = "✏️ Редактирование точки";
 
   openPanel();
 }
@@ -402,7 +410,16 @@ function deletePoint(id){
 // ================= PANEL =================
 function openPanel(){
   panel.style.display="block";
-  coords.innerText = current.lat.toFixed(5)+", "+current.lng.toFixed(5);
+
+  if(current){
+    coords.innerText = current.lat.toFixed(5)+", "+current.lng.toFixed(5);
+  }
+
+  if(!editMode){
+    photos = [];
+    renderPhotos();
+    desc.value = "";
+  }
 }
 
 function closePanel(){
