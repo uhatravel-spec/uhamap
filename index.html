@@ -193,6 +193,7 @@ function centerWithOffset(lat,lng){
 
 /* ICONS */
 const icons = {
+  "новая_точка":"📌",
   "рыбалка":"🎣",
   "платная рыбалка":"💰🎣",
   "кемпинг":"⛺",
@@ -268,8 +269,9 @@ function init(){
 
     if(tempMarker) map.removeLayer(tempMarker);
 
-    tempMarker = L.marker(current,{icon: icon("рыбалка")}).addTo(map);
-
+    tempMarker = L.marker(current, {
+  icon: icon(category.value)
+}).addTo(map);
     centerWithOffset(current.lat,current.lng);
 
     openPanel();
@@ -286,6 +288,9 @@ function enableCreateMode(){
 
 /* CATEGORY */
 function fillCategories(){
+  category.addEventListener("change", () => {
+  updateTempMarkerIcon();
+});
   const sel = category;
   sel.innerHTML="";
   Object.keys(icons).forEach(c=>{
@@ -293,6 +298,7 @@ function fillCategories(){
     o.value=c;
     o.innerHTML=`${icons[c]} ${c}`;
     sel.appendChild(o);
+    category.addEventListener("change", updateTempMarkerIcon);
   });
 }
 
@@ -527,6 +533,15 @@ document.addEventListener("touchstart",e=>{
 });
 
 desc.onfocus=()=> setPanel(0.9);
+function updateTempMarkerIcon(){
+
+  if(!tempMarker) return;
+  if(!category) return;
+
+  const selected = category.value;
+
+  tempMarker.setIcon(icon(selected));
+}
 
 init();
 
