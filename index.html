@@ -13,7 +13,6 @@
 body { margin:0; font-family:Arial; }
 #map { height:100vh; }
 
-/* ===== MENU ===== */
 .menu {
   position:fixed;
   top:10px;
@@ -30,7 +29,6 @@ body { margin:0; font-family:Arial; }
   margin-bottom:5px;
 }
 
-/* ===== PANEL ===== */
 .panel {
   position:fixed;
   bottom:0;
@@ -41,13 +39,10 @@ body { margin:0; font-family:Arial; }
   border-radius:20px 20px 0 0;
   display:none;
   z-index:9999;
-
   height:33vh;
   max-height:90vh;
-
   overflow-y:auto;
   -webkit-overflow-scrolling: touch;
-
   box-shadow:0 -5px 20px rgba(0,0,0,0.2);
   transition:height 0.2s ease;
 }
@@ -59,7 +54,6 @@ body { margin:0; font-family:Arial; }
   margin-bottom:5px;
 }
 
-/* ===== FORM ===== */
 .row { margin-bottom:10px; }
 
 select, textarea, button {
@@ -74,6 +68,11 @@ select, textarea, button {
   margin:5px;
   border-radius:8px;
 }
+
+/* 🔥 подсветка точки */
+.selected-marker {
+  transform: scale(1.3);
+}
 </style>
 </head>
 
@@ -85,7 +84,7 @@ select, textarea, button {
   <button onclick="openMyPoints()">📂 Мои точки</button>
 </div>
 
-<!-- ===== MAIN PANEL ===== -->
+<!-- MAIN PANEL -->
 <div class="panel" id="panel">
   <div class="handle" onclick="togglePanel()">—</div>
 
@@ -119,8 +118,14 @@ select, textarea, button {
   <button onclick="closePanel()">Закрыть</button>
 </div>
 
-<!-- ===== MY POINTS ===== -->
+<!-- MY POINTS -->
 <div class="panel" id="myPanel"></div>
+
+<!-- 🔥 INFO PANEL -->
+<div class="panel" id="infoPanel" style="height:25vh;">
+  <div class="handle" onclick="closeInfo()">—</div>
+  <div id="infoContent"></div>
+</div>
 
 <script>
 
@@ -138,7 +143,10 @@ let photos = [];
 let editMode = false;
 let editId = null;
 
-/* ===== PANEL STATE ===== */
+/* 🔥 активная точка */
+let activeMarker = null;
+
+/* PANEL */
 const panelEl = document.getElementById("panel");
 let collapsed = false;
 
@@ -151,15 +159,15 @@ function togglePanel(){
   setPanel(collapsed ? 0.1 : 0.33);
 }
 
-/* ===== MAP OFFSET (2/3 FIX) ===== */
+/* OFFSET */
 function centerWithOffset(lat,lng){
-  const offset = window.innerHeight * 0.16; // центр верхних 2/3
+  const offset = window.innerHeight * 0.16;
   const point = map.project([lat,lng], map.getZoom()).subtract([0, offset]);
   const newLatLng = map.unproject(point, map.getZoom());
   map.setView(newLatLng,15);
 }
 
-/* ===== ICONS ===== */
+/* ICONS */
 const icons = {
   "рыбалка":"🎣",
   "платная рыбалка":"💰🎣",
@@ -177,12 +185,11 @@ function icon(cat){
   });
 }
 
-/* ===== INIT ===== */
+/* INIT */
 function init(){
 
   map = L.map('map').setView([55,37],10);
 
-  // 🔥 СЛОИ (FIX)
   const normal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
   const sat = L.tileLayer(
     'https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
@@ -196,16 +203,6 @@ function init(){
   }).addTo(map);
 
   map.locate({setView:true, watch:true});
-
-  map.on("locationfound", e=>{
-    if(userMarker) map.removeLayer(userMarker);
-
-    userMarker = L.circleMarker(e.latlng,{
-      radius:8,color:"blue",fillColor:"blue",fillOpacity:1
-    }).addTo(map);
-
-    centerWithOffset(e.latlng.lat,e.latlng.lng);
-  });
 
   map.on("click", e=>{
     current = e.latlng;
@@ -223,11 +220,10 @@ function init(){
   PointStore.sync();
 }
 
-/* ===== CATEGORY ===== */
+/* CATEGORY */
 function fillCategories(){
   const sel = category;
   sel.innerHTML="";
-
   Object.keys(icons).forEach(c=>{
     let o=document.createElement("option");
     o.value=c;
@@ -236,13 +232,12 @@ function fillCategories(){
   });
 }
 
-/* ===== PHOTO ===== */
+/* PHOTO */
 function requestCamera(){ camera.click(); }
 
 camera.onchange=e=>{
   const file=e.target.files[0];
   if(!file) return;
-
   const r=new FileReader();
   r.onload=ev=>{
     photos.push(ev.target.result);
@@ -261,9 +256,8 @@ function renderPhotos(){
   });
 }
 
-/* ===== SAVE ===== */
+/* SAVE */
 function saveDraft(){
-
   let arr=JSON.parse(localStorage.getItem("points")||"[]");
 
   if(editMode){
@@ -287,7 +281,29 @@ function saveDraft(){
   closePanel();
 }
 
-/* ===== STORE ===== */
+/* 🔥 INFO PANEL */
+function openInfo(p){
+
+  const box = document.getElementById("infoContent");
+
+  box.innerHTML = `
+    <b>${icons[p.category]} ${p.category}</b><br>
+    📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
+    🚗 ${p.access}<br>
+    📝 ${p.desc || ""}<br>
+    ${(p.photos||[]).map(ph=>`<img src="${ph}" width="60">`).join("")}
+    <button onclick="editPoint(${p.id})">✏️ Изменить</button>
+    <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
+  `;
+
+  infoPanel.style.display="block";
+}
+
+function closeInfo(){
+  infoPanel.style.display="none";
+}
+
+/* STORE */
 const PointStore={
   sync(){
     const arr=JSON.parse(localStorage.getItem("points")||"[]");
@@ -302,23 +318,24 @@ const PointStore={
       const m=L.marker([p.lat,p.lng],{icon:icon(p.category)});
 
       m.on("click",()=>{
+
+        if(activeMarker && activeMarker.getElement()){
+          activeMarker.getElement().classList.remove("selected-marker");
+        }
+
+        activeMarker = m;
+
+        setTimeout(()=>{
+          if(m.getElement()){
+            m.getElement().classList.add("selected-marker");
+          }
+        },10);
+
         current={lat:p.lat,lng:p.lng};
-
-        category.value=p.category;
-        access.value=p.access;
-        desc.value=p.desc;
-        photos=[...(p.photos||[])];
-
-        renderPhotos();
-
-        editMode=true;
-        editId=p.id;
-
-        title.innerText="✏️ Редактирование";
 
         centerWithOffset(p.lat,p.lng);
 
-        openPanel();
+        openInfo(p);
       });
 
       window.layer.addLayer(m);
@@ -326,7 +343,7 @@ const PointStore={
   }
 };
 
-/* ===== MY POINTS ===== */
+/* MY POINTS */
 function openMyPoints(){
   const box=myPanel;
   box.style.display="block";
@@ -365,22 +382,22 @@ function editPoint(id){
   const p=arr.find(x=>x.id===id);
   if(!p) return;
 
+  editMode=true;
+  editId=id;
+
   current={lat:p.lat,lng:p.lng};
 
   category.value=p.category;
   access.value=p.access;
   desc.value=p.desc;
+
   photos=[...(p.photos||[])];
-
   renderPhotos();
-
-  editMode=true;
-  editId=id;
 
   title.innerText="✏️ Редактирование";
 
+  closeInfo();
   centerWithOffset(p.lat,p.lng);
-
   openPanel();
 }
 
@@ -389,11 +406,13 @@ function deletePoint(id){
   arr=arr.filter(x=>x.id!==id);
 
   localStorage.setItem("points",JSON.stringify(arr));
+
   PointStore.sync();
+  closeInfo();
   openMyPoints();
 }
 
-/* ===== PANEL ===== */
+/* PANEL */
 function openPanel(){
   panel.style.display="block";
   setPanel(0.33);
@@ -410,7 +429,7 @@ function closePanel(){
   title.innerText="📍 Новая точка";
 }
 
-/* ===== KEYBOARD FIX ===== */
+/* KEYBOARD */
 document.addEventListener("touchstart",e=>{
   if(!e.target.closest("textarea")){
     document.activeElement.blur();
@@ -419,7 +438,6 @@ document.addEventListener("touchstart",e=>{
 
 desc.onfocus=()=> setPanel(0.9);
 
-/* ===== INIT ===== */
 init();
 
 </script>
