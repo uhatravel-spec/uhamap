@@ -72,7 +72,6 @@ select, textarea, button {
   border-radius:8px;
 }
 
-/* 🔥 усиленная подсветка */
 .selected-marker {
   transform: scale(1.5);
 }
@@ -158,12 +157,16 @@ function togglePanel(){
   setPanel(collapsed ? 0.1 : 0.33);
 }
 
-/* OFFSET */
+/* 🔥 FIX: без изменения zoom */
 function centerWithOffset(lat,lng){
+  const zoom = map.getZoom();
+
   const offset = window.innerHeight * 0.16;
-  const point = map.project([lat,lng], map.getZoom()).subtract([0, offset]);
-  const newLatLng = map.unproject(point, map.getZoom());
-  map.setView(newLatLng,15);
+
+  const point = map.project([lat,lng], zoom).subtract([0, offset]);
+  const newLatLng = map.unproject(point, zoom);
+
+  map.setView(newLatLng, zoom, {animate:true});
 }
 
 /* ICONS */
@@ -184,7 +187,7 @@ function icon(cat){
   });
 }
 
-/* 🔥 НОВАЯ стабильная подсветка */
+/* 🔥 FIX подсветки */
 function highlightMarker(marker){
 
   if(activeMarker && activeMarker.getElement()){
@@ -193,10 +196,12 @@ function highlightMarker(marker){
 
   activeMarker = marker;
 
-  const el = marker.getElement();
-  if(el){
-    el.classList.add("selected-marker");
-  }
+  setTimeout(()=>{
+    const el = marker.getElement();
+    if(el){
+      el.classList.add("selected-marker");
+    }
+  },0);
 }
 
 /* INIT */
@@ -216,11 +221,8 @@ function init(){
     "Спутник":sat
   }).addTo(map);
 
-  map.locate({setView:true, watch:true});
-
   map.on("click", e=>{
 
-    // 🔥 сброс подсветки
     if(activeMarker && activeMarker.getElement()){
       activeMarker.getElement().classList.remove("selected-marker");
       activeMarker = null;
@@ -259,6 +261,7 @@ function requestCamera(){ camera.click(); }
 camera.onchange=e=>{
   const file=e.target.files[0];
   if(!file) return;
+
   const r=new FileReader();
   r.onload=ev=>{
     photos.push(ev.target.result);
@@ -268,11 +271,16 @@ camera.onchange=e=>{
 };
 
 function renderPhotos(){
+  const photosEl = document.getElementById("photos");
   photosEl.innerHTML="";
+
   photos.forEach((p,i)=>{
     let img=document.createElement("img");
     img.src=p;
-    img.onclick=()=>{ photos.splice(i,1); renderPhotos(); };
+    img.onclick=()=>{
+      photos.splice(i,1);
+      renderPhotos();
+    };
     photosEl.appendChild(img);
   });
 }
@@ -302,9 +310,8 @@ function saveDraft(){
   closePanel();
 }
 
-/* INFO PANEL */
+/* INFO */
 function openInfo(p){
-
   const box = document.getElementById("infoContent");
 
   box.innerHTML = `
@@ -338,16 +345,10 @@ const PointStore={
     arr.forEach(p=>{
       const m=L.marker([p.lat,p.lng],{icon:icon(p.category)});
 
-      m._data = p; // 🔥 связь
-
       m.on("click",()=>{
-
-        highlightMarker(m); // 🔥 подсветка
-
+        highlightMarker(m);
         current={lat:p.lat,lng:p.lng};
-
         centerWithOffset(p.lat,p.lng);
-
         openInfo(p);
       });
 
@@ -390,6 +391,7 @@ function focusPoint(lat,lng){
   centerWithOffset(lat,lng);
 }
 
+/* 🔥 FIX edit */
 function editPoint(id){
   const arr=JSON.parse(localStorage.getItem("points")||"[]");
   const p=arr.find(x=>x.id===id);
@@ -408,6 +410,11 @@ function editPoint(id){
   renderPhotos();
 
   title.innerText="✏️ Редактирование";
+
+  if(tempMarker){
+    map.removeLayer(tempMarker);
+    tempMarker=null;
+  }
 
   closeInfo();
   centerWithOffset(p.lat,p.lng);
