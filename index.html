@@ -227,64 +227,64 @@ function init(){
     "Обычная":normal,
     "Спутник":sat
   }).addTo(map);
-}
+
   map.on("zoomend", ()=> userZoomChanged = true);
   map.on("dragstart", ()=> userZoomChanged = true);
 
   map.locate({
-  setView: false,
-  watch: true,
-  enableHighAccuracy: true,
-  maximumAge: 0,
-  timeout: 10000
-});
+    setView: false,
+    watch: true,
+    enableHighAccuracy: true,
+    maximumAge: 0,
+    timeout: 10000
+  });
 
   map.on("locationfound", e => {
-  const latlng = e.latlng;
+    const latlng = e.latlng;
 
-  // 🔥 1. первый запуск — центрируем карту
-  if (!initialLocationSet) {
-    map.setView(latlng, 14); // стартовый zoom
-    initialLocationSet = true;
-  }
+    if (!initialLocationSet) {
+      map.setView(latlng, 14);
+      initialLocationSet = true;
+    }
 
-  // 🔵 user marker
-  if (!userMarker) {
-    userMarker = L.marker(latlng, {
-      icon: L.divIcon({
-        className: "",
-        html: `<div class="user-ring"></div>`
-      })
-    }).addTo(map);
-  } else {
-    userMarker.setLatLng(latlng);
-  }
-});
+    if (!userMarker) {
+      userMarker = L.marker(latlng, {
+        icon: L.divIcon({
+          className: "",
+          html: `<div class="user-ring"></div>`
+        })
+      }).addTo(map);
+    } else {
+      userMarker.setLatLng(latlng);
+    }
+  });
 
-map.on("click", e => {
+  map.on("click", e => {
 
-  if (!createMode) return;
+    if (!createMode) return;
 
-  current = e.latlng;
+    current = e.latlng;
 
-  // создаём точку только если её ещё нет
-  if (!tempMarker) {
+    if (!tempMarker) {
 
-    tempMarker = L.marker(current, {
-      icon: icon(category.value || "новая_точка"),
-      draggable: true
-    }).addTo(map);
+      tempMarker = L.marker(current, {
+        icon: icon(category.value || "новая_точка"),
+        draggable: true
+      }).addTo(map);
 
-    tempMarker.on("dragend", (ev) => {
-      current = ev.target.getLatLng();
-    });
+      tempMarker.on("dragend", (ev) => {
+        current = ev.target.getLatLng();
+      });
 
-    openPanel();
-  } else {
-    // если уже есть — просто двигаем
-    tempMarker.setLatLng(current);
-  }
-});
+      openPanel();
+    } else {
+      tempMarker.setLatLng(current);
+    }
+  });
+
+  fillCategories();
+  PointStore.sync();
+}
 
 /* CREATE MODE */
 function enableCreateMode(){
