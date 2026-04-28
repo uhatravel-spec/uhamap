@@ -160,9 +160,13 @@ let activePointId = null;
 let createMode = false;
 
 let userZoomChanged = false;
+let panelOpen = false;
 
 /* PANEL */
 const panelEl = document.getElementById("panel");
+const infoPanel = document.getElementById("infoPanel");
+const myPanel = document.getElementById("myPanel");
+
 
 function setPanel(h){
   panelEl.style.height = (window.innerHeight * h) + "px";
@@ -332,6 +336,7 @@ function saveDraft(){
 
 /* INFO */
 function openInfo(p){
+  panelOpen = true;
 
   activePointId = p.id;
 
@@ -479,6 +484,7 @@ function deletePoint(id){
 function openPanel(){
   panel.style.display="block";
   setPanel(0.33);
+  panelOpen = true;
 
   if(current){
     coords.innerText=current.lat.toFixed(5)+", "+current.lng.toFixed(5);
@@ -487,13 +493,16 @@ function openPanel(){
 
 function closePanel(){
   panel.style.display="none";
+  panelOpen = false;
   editMode=false;
   editId=null;
   title.innerText="📍 Новая точка";
 }
 
 function closeInfo(){
-  infoPanel.style.display="none";
+  infoPanel.style.display = "none";
+  panelOpen = false;
+  activePointId = null;
 }
 
 /* KEYBOARD FIX */
