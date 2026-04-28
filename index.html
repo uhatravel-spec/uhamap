@@ -161,6 +161,7 @@ let createMode = false;
 
 let userZoomChanged = false;
 let panelOpen = false;
+let initialLocationSet = false;
 
 /* PANEL */
 const panelEl = document.getElementById("panel");
@@ -229,22 +230,35 @@ function init(){
   map.on("zoomend", ()=> userZoomChanged = true);
   map.on("dragstart", ()=> userZoomChanged = true);
 
-  map.locate({watch:true, enableHighAccuracy:true});
+  map.locate({
+  setView: false,
+  watch: true,
+  enableHighAccuracy: true,
+  maximumAge: 0,
+  timeout: 10000
+});
 
-  map.on("locationfound", e=>{
-    const latlng = e.latlng;
+  map.on("locationfound", e => {
+  const latlng = e.latlng;
 
-    if(!userMarker){
-      userMarker = L.marker(latlng,{
-        icon: L.divIcon({
-          className:"",
-          html:`<div class="user-ring"></div>`
-        })
-      }).addTo(map);
-    } else {
-      userMarker.setLatLng(latlng);
-    }
-  });
+  // 🔥 1. первый запуск — центрируем карту
+  if (!initialLocationSet) {
+    map.setView(latlng, 14); // стартовый zoom
+    initialLocationSet = true;
+  }
+
+  // 🔵 user marker
+  if (!userMarker) {
+    userMarker = L.marker(latlng, {
+      icon: L.divIcon({
+        className: "",
+        html: `<div class="user-ring"></div>`
+      })
+    }).addTo(map);
+  } else {
+    userMarker.setLatLng(latlng);
+  }
+});
 
   map.on("click", e=>{
 
