@@ -227,7 +227,7 @@ function init(){
     "Обычная":normal,
     "Спутник":sat
   }).addTo(map);
-
+}
   map.on("zoomend", ()=> userZoomChanged = true);
   map.on("dragstart", ()=> userZoomChanged = true);
 
@@ -261,44 +261,80 @@ function init(){
   }
 });
 
-  map.on("click", e=>{
+map.on("click", e => {
 
-    if(!createMode) return;
+  if (!createMode) return;
 
-    current = e.latlng;
+  current = e.latlng;
 
-    if(tempMarker) map.removeLayer(tempMarker);
+  // создаём точку только если её ещё нет
+  if (!tempMarker) {
 
     tempMarker = L.marker(current, {
-  icon: icon(category.value)
-}).addTo(map);
-    centerWithOffset(current.lat,current.lng);
+      icon: icon(category.value || "новая_точка"),
+      draggable: true
+    }).addTo(map);
+
+    tempMarker.on("dragend", (ev) => {
+      current = ev.target.getLatLng();
+    });
 
     openPanel();
-  });
-
-  fillCategories();
-  PointStore.sync();
-}
+  } else {
+    // если уже есть — просто двигаем
+    tempMarker.setLatLng(current);
+  }
+});
 
 /* CREATE MODE */
 function enableCreateMode(){
+
   createMode = true;
+
+  // удалить старую временную точку
+  if (tempMarker) {
+    map.removeLayer(tempMarker);
+    tempMarker = null;
+  }
+
+  // взять центр карты как старт
+  current = map.getCenter();
+
+  // СРАЗУ создать точку
+  tempMarker = L.marker(current, {
+    icon: icon("новая_точка"),
+    draggable: true
+  }).addTo(map);
+
+  // обновлять позицию при перетаскивании
+  tempMarker.on("dragend", (e) => {
+    current = e.target.getLatLng();
+  });
+
+  openPanel();
 }
 
 /* CATEGORY */
 function fillCategories(){
-  category.addEventListener("change", () => {
-  updateTempMarkerIcon();
-});
+
   const sel = category;
-  sel.innerHTML="";
-  Object.keys(icons).forEach(c=>{
-    let o=document.createElement("option");
-    o.value=c;
-    o.innerHTML=`${icons[c]} ${c}`;
+  sel.innerHTML = "";
+
+  Object.keys(icons).forEach(c => {
+    let o = document.createElement("option");
+    o.value = c;
+    o.innerHTML = `${icons[c]} ${c}`;
     sel.appendChild(o);
-    category.addEventListener("change", updateTempMarkerIcon);
+  });
+
+  // 🔥 ОДИН единственный обработчик изменения категории
+  category.addEventListener("change", () => {
+
+    // если временная точка уже создана — меняем иконку сразу
+    if (tempMarker) {
+      tempMarker.setIcon(icon(category.value));
+    }
+
   });
 }
 
@@ -352,6 +388,7 @@ function saveDraft(){
 
   PointStore.sync();
   closePanel();
+  createMode = false;
 }
 
 /* INFO */
@@ -512,6 +549,7 @@ function openPanel(){
 }
 
 function closePanel(){
+  createMode = false;
   panel.style.display="none";
   panelOpen = false;
   editMode=false;
@@ -533,15 +571,6 @@ document.addEventListener("touchstart",e=>{
 });
 
 desc.onfocus=()=> setPanel(0.9);
-function updateTempMarkerIcon(){
-
-  if(!tempMarker) return;
-  if(!category) return;
-
-  const selected = category.value;
-
-  tempMarker.setIcon(icon(selected));
-}
 
 init();
 
