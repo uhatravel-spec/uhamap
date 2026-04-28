@@ -13,14 +13,12 @@
 body { margin:0; font-family:Arial; }
 #map { height:100vh; }
 
-/* UI */
 .menu { position:fixed; top:10px; left:10px; z-index:9999; }
 .menu button {
-  background:#2a9d8f; color:#fff; border:none;
-  padding:10px; border-radius:10px;
+  background:#2a9d8f; color:#fff;
+  border:none; padding:10px; border-radius:10px;
 }
 
-/* PANELS */
 .panel {
   position:fixed;
   bottom:0; left:0; right:0;
@@ -30,29 +28,12 @@ body { margin:0; font-family:Arial; }
   display:none;
   z-index:9999;
   height:33vh;
-  max-height:90vh;
-  overflow-y:auto;
+  overflow:auto;
   box-shadow:0 -5px 20px rgba(0,0,0,0.2);
 }
 
-.handle { text-align:center; font-size:22px; cursor:pointer; }
-
-/* PHOTO */
-.photos img {
-  width:70px; height:70px;
-  object-fit:cover;
-  margin:5px;
-  border-radius:8px;
-}
-
-/* MARKER */
 .selected-marker {
   transform: scale(1.5);
-}
-
-/* MY LIST */
-.active-item {
-  background:#e6f7ff;
 }
 </style>
 </head>
@@ -65,101 +46,63 @@ body { margin:0; font-family:Arial; }
   <button onclick="UI.openMyPoints()">📂 Мои точки</button>
 </div>
 
-<!-- PANELS -->
-<div class="panel" id="panel">
-  <div class="handle" onclick="UI.togglePanel()">—</div>
-
-  <h3 id="title">📍 Новая точка</h3>
-  <div id="coords"></div>
-
-  <select id="category"></select>
-
-  <select id="access">
-    <option>легковой</option>
-    <option>внедорожник</option>
-    <option>пешком</option>
-    <option>лодка</option>
-  </select>
-
-  <textarea id="desc"></textarea>
-
-  <button onclick="App.UI.camera()">📸 Фото</button>
-  <input type="file" id="camera" accept="image/*" capture="environment" hidden>
-
-  <div class="photos" id="photos"></div>
-
-  <button onclick="App.Points.save()">Сохранить</button>
-  <button onclick="closePanel()">Закрыть</button>
-</div>
-
+<div class="panel" id="panel"></div>
+<div class="panel" id="infoPanel"></div>
 <div class="panel" id="myPanel"></div>
-
-<div class="panel" id="infoPanel">
-  <div class="handle" onclick="UI.closeInfo()">—</div>
-  <div id="infoContent"></div>
-</div>
 
 <script>
 
 /* ================= STATE ================= */
-const App = {
-  map:null,
+const State = {
   current:null,
-  activeMarker:null,
-  tempMarker:null,
-  photos:[],
   editId:null,
-  editMode:false
+  editMode:false,
+  activeMarker:null,
+  photos:[]
 };
 
 /* ================= MAP ================= */
-App.Map = {
+const Map = {
+
   init(){
+    this.map = L.map('map').setView([55,37],10);
 
-    App.map = L.map('map').setView([55,37],10);
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+    const sat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+      {subdomains:['mt0','mt1','mt2','mt3']});
 
-    const normal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-    const sat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{
-      subdomains:['mt0','mt1','mt2','mt3']
+    osm.addTo(this.map);
+
+    L.control.layers({ "Обычная":osm, "Спутник":sat }).addTo(this.map);
+
+    this.map.locate({setView:true});
+
+    this.map.on("locationfound", e=>{
+      this.user(e.latlng);
     });
 
-    normal.addTo(App.map);
-
-    L.control.layers({
-      "Обычная":normal,
-      "Спутник":sat
-    }).addTo(App.map);
-
-    App.map.locate({setView:true});
-
-    App.map.on("locationfound", e=>{
-      App.Map.user(e.latlng);
+    this.map.on("click", e=>{
+      State.current = e.latlng;
+      UI.openPanel();
     });
 
-    App.map.on("click", e=>{
-      App.current = e.latlng;
-      App.UI.openPanel();
-    });
-
-    App.Points.load();
+    Points.load();
   },
 
   user(latlng){
-    if(App.userMarker) App.map.removeLayer(App.userMarker);
+    if(this.userMarker) this.map.removeLayer(this.userMarker);
 
-    App.userMarker = L.circleMarker(latlng,{
-      radius:8,color:"blue",fillOpacity:1
-    }).addTo(App.map);
+    this.userMarker = L.circleMarker(latlng,{
+      radius:8,color:"blue"
+    }).addTo(this.map);
   },
 
   center(lat,lng){
-    const zoom = App.map.getZoom();
+    const zoom = this.map.getZoom();
     const offset = window.innerHeight / 6;
 
-    const point = App.map.project([lat,lng], zoom).subtract([0,offset]);
-    const newLatLng = App.map.unproject(point, zoom);
-
-    App.map.setView(newLatLng, zoom);
+    const p = this.map.project([lat,lng], zoom).subtract([0,offset]);
+    this.map.setView(this.map.unproject(p,zoom), zoom);
   }
 };
 
@@ -168,51 +111,36 @@ const UI = {
 
   openPanel(){
     panel.style.display="block";
-    panel.style.height="33vh";
-
-    coords.innerText = App.current?.lat.toFixed(5)+","+App.current?.lng.toFixed(5);
-  },
-
-  togglePanel(){
-    panel.style.height = panel.offsetHeight < 200 ? "33vh" : "10vh";
   },
 
   openInfo(p){
     infoPanel.style.display="block";
-
-    infoContent.innerHTML = `
+    infoPanel.innerHTML = `
       <b>${p.category}</b><br>
       ${p.desc}<br>
       ${(p.photos||[]).map(x=>`<img src="${x}" width="60">`).join("")}
-      <button onclick="App.Points.edit(${p.id})">Изменить</button>
+      <button onclick="Points.edit(${p.id})">Изменить</button>
     `;
-  },
-
-  closeInfo(){
-    infoPanel.style.display="none";
-  },
-
-  camera(){
-    camera.click();
   },
 
   openMyPoints(){
     myPanel.style.display="block";
 
-    const arr = App.Points.get();
+    const arr = Points.get();
 
     myPanel.innerHTML = arr.map(p=>`
       <div>
         ${p.category}<br>
-        <button onclick="App.Points.focus(${p.id})">Показать</button>
-        <button onclick="App.Points.edit(${p.id})">Изменить</button>
+        <button onclick="Points.focus(${p.id})">Показать</button>
+        <button onclick="Points.edit(${p.id})">Изменить</button>
+        <button onclick="Points.remove(${p.id})">Удалить</button>
       </div>
     `).join("");
   }
 };
 
 /* ================= POINTS ================= */
-App.Points = {
+const Points = {
 
   get(){
     return JSON.parse(localStorage.getItem("points")||"[]");
@@ -222,14 +150,15 @@ App.Points = {
 
     let arr = this.get();
 
-    if(App.editMode){
+    if(State.editMode){
       arr = arr.map(p=>{
-        if(p.id===App.editId){
-          return {...p,
+        if(p.id===State.editId){
+          return {
+            ...p,
             category:category.value,
             access:access.value,
             desc:desc.value,
-            photos:App.photos
+            photos:State.photos
           };
         }
         return p;
@@ -237,91 +166,76 @@ App.Points = {
     } else {
       arr.push({
         id:Date.now(),
-        lat:App.current.lat,
-        lng:App.current.lng,
+        lat:State.current.lat,
+        lng:State.current.lng,
         category:category.value,
         access:access.value,
         desc:desc.value,
-        photos:App.photos
+        photos:State.photos
       });
     }
 
     localStorage.setItem("points",JSON.stringify(arr));
-
     this.load();
-    closePanel();
   },
 
   load(){
 
-    if(App.layer) App.layer.clearLayers();
-    else App.layer = L.layerGroup().addTo(App.map);
+    if(Map.layer) Map.layer.clearLayers();
+    else Map.layer = L.layerGroup().addTo(Map.map);
 
-    const arr = this.get();
-
-    arr.forEach(p=>{
+    this.get().forEach(p=>{
       const m = L.marker([p.lat,p.lng]);
 
       m.on("click",()=>{
-        App.activeMarker = m;
+        if(State.activeMarker)
+          State.activeMarker.getElement()?.classList.remove("selected-marker");
 
-        App.Map.center(p.lat,p.lng);
+        State.activeMarker = m;
+
+        setTimeout(()=>{
+          m.getElement()?.classList.add("selected-marker");
+        });
+
+        Map.center(p.lat,p.lng);
         UI.openInfo(p);
       });
 
-      App.layer.addLayer(m);
+      Map.layer.addLayer(m);
     });
   },
 
   focus(id){
     const p = this.get().find(x=>x.id===id);
-    App.Map.center(p.lat,p.lng);
+    Map.center(p.lat,p.lng);
   },
 
   edit(id){
     const p = this.get().find(x=>x.id===id);
 
-    App.editMode = true;
-    App.editId = id;
+    State.editMode = true;
+    State.editId = id;
 
-    App.current = {lat:p.lat,lng:p.lng};
+    State.current = {lat:p.lat,lng:p.lng};
+    State.photos = p.photos||[];
 
     category.value = p.category;
     access.value = p.access;
     desc.value = p.desc;
-    App.photos = p.photos||[];
-
-    renderPhotos();
 
     UI.openPanel();
-    UI.closeInfo();
+    UI.openInfo(p);
+  },
+
+  remove(id){
+    let arr = this.get().filter(x=>x.id!==id);
+    localStorage.setItem("points",JSON.stringify(arr));
+    this.load();
   }
 };
 
-/* ================= PHOTO ================= */
-camera.onchange = e=>{
-  const file = e.target.files[0];
-  const r = new FileReader();
-
-  r.onload = ev=>{
-    App.photos.push(ev.target.result);
-    renderPhotos();
-  };
-
-  r.readAsDataURL(file);
-};
-
-function renderPhotos(){
-  photos.innerHTML="";
-  App.photos.forEach(p=>{
-    const img=document.createElement("img");
-    img.src=p;
-    photos.appendChild(img);
-  });
-}
-
 /* ================= INIT ================= */
-App.Map.init();
+Map.init();
 
 </script>
 </body>
