@@ -13,52 +13,46 @@
 body { margin:0; font-family:Arial; }
 #map { height:100vh; }
 
-.menu {
-  position:fixed;
-  top:10px;
-  left:10px;
-  z-index:9999;
-}
-
+/* UI */
+.menu { position:fixed; top:10px; left:10px; z-index:9999; }
 .menu button {
-  background:#2a9d8f;
-  color:#fff;
-  border:none;
-  padding:10px;
-  border-radius:10px;
+  background:#2a9d8f; color:#fff; border:none;
+  padding:10px; border-radius:10px;
 }
 
+/* PANELS */
 .panel {
   position:fixed;
-  bottom:0;
-  left:0;
-  right:0;
+  bottom:0; left:0; right:0;
   background:#fff;
   padding:15px;
   border-radius:20px 20px 0 0;
   display:none;
   z-index:9999;
   height:33vh;
+  max-height:90vh;
   overflow-y:auto;
   box-shadow:0 -5px 20px rgba(0,0,0,0.2);
 }
 
-.handle {
-  text-align:center;
-  font-size:22px;
-  cursor:pointer;
-}
+.handle { text-align:center; font-size:22px; cursor:pointer; }
 
+/* PHOTO */
 .photos img {
-  width:70px;
-  height:70px;
+  width:70px; height:70px;
   object-fit:cover;
   margin:5px;
   border-radius:8px;
 }
 
+/* MARKER */
 .selected-marker {
   transform: scale(1.5);
+}
+
+/* MY LIST */
+.active-item {
+  background:#e6f7ff;
 }
 </style>
 </head>
@@ -73,12 +67,13 @@ body { margin:0; font-family:Arial; }
 
 <!-- PANELS -->
 <div class="panel" id="panel">
-  <div class="handle" onclick="UI.toggle()">—</div>
+  <div class="handle" onclick="UI.togglePanel()">—</div>
 
   <h3 id="title">📍 Новая точка</h3>
   <div id="coords"></div>
 
   <select id="category"></select>
+
   <select id="access">
     <option>легковой</option>
     <option>внедорожник</option>
@@ -88,12 +83,13 @@ body { margin:0; font-family:Arial; }
 
   <textarea id="desc"></textarea>
 
-  <button onclick="UI.camera()">📸 Фото</button>
+  <button onclick="App.UI.camera()">📸 Фото</button>
   <input type="file" id="camera" accept="image/*" capture="environment" hidden>
 
   <div class="photos" id="photos"></div>
 
-  <button onclick="Point.save()">Сохранить</button>
+  <button onclick="App.Points.save()">Сохранить</button>
+  <button onclick="closePanel()">Закрыть</button>
 </div>
 
 <div class="panel" id="myPanel"></div>
@@ -105,149 +101,90 @@ body { margin:0; font-family:Arial; }
 
 <script>
 
-/* ===================== STORAGE ===================== */
-const Storage = {
-  get(){ return JSON.parse(localStorage.getItem("points")||"[]"); },
-  set(v){ localStorage.setItem("points",JSON.stringify(v)); }
-};
-
-/* ===================== MAP ===================== */
-const Map = {
-  init(){
-    this.map = L.map("map").setView([55,37],10);
-
-    const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
-    const sat = L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",{
-      subdomains:["mt0","mt1","mt2","mt3"]
-    });
-
-    osm.addTo(this.map);
-    L.control.layers({"OSM":osm,"SAT":sat}).addTo(this.map);
-
-    this.map.locate({watch:true});
-
-    this.map.on("locationfound",e=>{
-      if(this.user) this.map.removeLayer(this.user);
-
-      this.user = L.circleMarker(e.latlng,{
-        radius:8,color:"blue",fillOpacity:1
-      }).addTo(this.map);
-    });
-
-    this.map.on("click",e=>{
-      Point.current = e.latlng;
-      UI.openPanel();
-      UI.addTempMarker(e.latlng);
-    });
-  },
-
-  center(lat,lng){
-    const zoom = this.map.getZoom();
-    const offset = window.innerHeight/6;
-
-    const p = this.map.project([lat,lng],zoom).subtract([0,offset]);
-    this.map.setView(this.map.unproject(p,zoom),zoom,{animate:true});
-  }
-};
-
-/* ===================== POINTS ===================== */
-const Point = {
+/* ================= STATE ================= */
+const App = {
+  map:null,
   current:null,
   activeMarker:null,
   tempMarker:null,
+  photos:[],
+  editId:null,
+  editMode:false
+};
 
-  load(){
-    if(this.layer) Map.map.removeLayer(this.layer);
-    this.layer = L.layerGroup().addTo(Map.map);
+/* ================= MAP ================= */
+App.Map = {
+  init(){
 
-    Storage.get().forEach(p=>{
-      const m = L.marker([p.lat,p.lng],{icon:Icon(p.category)}).addTo(this.layer);
+    App.map = L.map('map').setView([55,37],10);
 
-      m.on("click",()=>{
-        this.setActive(m,p);
-      });
+    const normal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+    const sat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{
+      subdomains:['mt0','mt1','mt2','mt3']
     });
+
+    normal.addTo(App.map);
+
+    L.control.layers({
+      "Обычная":normal,
+      "Спутник":sat
+    }).addTo(App.map);
+
+    App.map.locate({setView:true});
+
+    App.map.on("locationfound", e=>{
+      App.Map.user(e.latlng);
+    });
+
+    App.map.on("click", e=>{
+      App.current = e.latlng;
+      App.UI.openPanel();
+    });
+
+    App.Points.load();
   },
 
-  setActive(marker,p){
+  user(latlng){
+    if(App.userMarker) App.map.removeLayer(App.userMarker);
 
-    if(this.activeMarker){
-      this.activeMarker.getElement()?.classList.remove("selected-marker");
-    }
-
-    this.activeMarker = marker;
-    setTimeout(()=>{
-      marker.getElement()?.classList.add("selected-marker");
-    },10);
-
-    UI.openInfo(p);
-    Map.center(p.lat,p.lng);
+    App.userMarker = L.circleMarker(latlng,{
+      radius:8,color:"blue",fillOpacity:1
+    }).addTo(App.map);
   },
 
-  save(){
-    let arr = Storage.get();
+  center(lat,lng){
+    const zoom = App.map.getZoom();
+    const offset = window.innerHeight / 6;
 
-    if(UI.editMode){
-      arr = arr.map(p=>{
-        if(p.id===UI.editId){
-          return {...p,
-            category:category.value,
-            access:access.value,
-            desc:desc.value,
-            photos:UI.photos
-          };
-        }
-        return p;
-      });
-    } else {
-      arr.push({
-        id:Date.now(),
-        lat:this.current.lat,
-        lng:this.current.lng,
-        category:category.value,
-        access:access.value,
-        desc:desc.value,
-        photos:UI.photos
-      });
-    }
+    const point = App.map.project([lat,lng], zoom).subtract([0,offset]);
+    const newLatLng = App.map.unproject(point, zoom);
 
-    Storage.set(arr);
-    this.load();
-    UI.closePanel();
+    App.map.setView(newLatLng, zoom);
   }
 };
 
-/* ===================== UI ===================== */
+/* ================= UI ================= */
 const UI = {
-  editMode:false,
-  editId:null,
-  photos:[],
 
   openPanel(){
     panel.style.display="block";
+    panel.style.height="33vh";
+
+    coords.innerText = App.current?.lat.toFixed(5)+","+App.current?.lng.toFixed(5);
   },
 
-  closePanel(){
-    panel.style.display="none";
-    this.editMode=false;
-  },
-
-  toggle(){
-    panel.style.height = panel.offsetHeight<300?"33vh":"10vh";
-  },
-
-  addTempMarker(latlng){
-    if(Point.tempMarker) Map.map.removeLayer(Point.tempMarker);
-    Point.tempMarker = L.marker(latlng,{icon:Icon("рыбалка")}).addTo(Map.map);
+  togglePanel(){
+    panel.style.height = panel.offsetHeight < 200 ? "33vh" : "10vh";
   },
 
   openInfo(p){
     infoPanel.style.display="block";
-    infoContent.innerHTML=`
+
+    infoContent.innerHTML = `
       <b>${p.category}</b><br>
-      ${p.desc||""}<br>
-      ${(p.photos||[]).map(i=>`<img src="${i}" width="60">`).join("")}
-      <button onclick="UI.edit(${p.id})">✏️ Изменить</button>
+      ${p.desc}<br>
+      ${(p.photos||[]).map(x=>`<img src="${x}" width="60">`).join("")}
+      <button onclick="App.Points.edit(${p.id})">Изменить</button>
     `;
   },
 
@@ -255,42 +192,137 @@ const UI = {
     infoPanel.style.display="none";
   },
 
-  edit(id){
-    const p = Storage.get().find(x=>x.id===id);
-
-    this.editMode=true;
-    this.editId=id;
-
-    Point.current = {lat:p.lat,lng:p.lng};
-
-    category.value=p.category;
-    access.value=p.access;
-    desc.value=p.desc;
-
-    this.photos = p.photos||[];
-
-    this.closeInfo();
-    Map.center(p.lat,p.lng);
-    this.openPanel();
-  },
-
   camera(){
     camera.click();
+  },
+
+  openMyPoints(){
+    myPanel.style.display="block";
+
+    const arr = App.Points.get();
+
+    myPanel.innerHTML = arr.map(p=>`
+      <div>
+        ${p.category}<br>
+        <button onclick="App.Points.focus(${p.id})">Показать</button>
+        <button onclick="App.Points.edit(${p.id})">Изменить</button>
+      </div>
+    `).join("");
   }
 };
 
-/* ===================== ICON ===================== */
-function Icon(c){
-  return L.divIcon({
-    html:`<div style="font-size:22px">${c}</div>`
+/* ================= POINTS ================= */
+App.Points = {
+
+  get(){
+    return JSON.parse(localStorage.getItem("points")||"[]");
+  },
+
+  save(){
+
+    let arr = this.get();
+
+    if(App.editMode){
+      arr = arr.map(p=>{
+        if(p.id===App.editId){
+          return {...p,
+            category:category.value,
+            access:access.value,
+            desc:desc.value,
+            photos:App.photos
+          };
+        }
+        return p;
+      });
+    } else {
+      arr.push({
+        id:Date.now(),
+        lat:App.current.lat,
+        lng:App.current.lng,
+        category:category.value,
+        access:access.value,
+        desc:desc.value,
+        photos:App.photos
+      });
+    }
+
+    localStorage.setItem("points",JSON.stringify(arr));
+
+    this.load();
+    closePanel();
+  },
+
+  load(){
+
+    if(App.layer) App.layer.clearLayers();
+    else App.layer = L.layerGroup().addTo(App.map);
+
+    const arr = this.get();
+
+    arr.forEach(p=>{
+      const m = L.marker([p.lat,p.lng]);
+
+      m.on("click",()=>{
+        App.activeMarker = m;
+
+        App.Map.center(p.lat,p.lng);
+        UI.openInfo(p);
+      });
+
+      App.layer.addLayer(m);
+    });
+  },
+
+  focus(id){
+    const p = this.get().find(x=>x.id===id);
+    App.Map.center(p.lat,p.lng);
+  },
+
+  edit(id){
+    const p = this.get().find(x=>x.id===id);
+
+    App.editMode = true;
+    App.editId = id;
+
+    App.current = {lat:p.lat,lng:p.lng};
+
+    category.value = p.category;
+    access.value = p.access;
+    desc.value = p.desc;
+    App.photos = p.photos||[];
+
+    renderPhotos();
+
+    UI.openPanel();
+    UI.closeInfo();
+  }
+};
+
+/* ================= PHOTO ================= */
+camera.onchange = e=>{
+  const file = e.target.files[0];
+  const r = new FileReader();
+
+  r.onload = ev=>{
+    App.photos.push(ev.target.result);
+    renderPhotos();
+  };
+
+  r.readAsDataURL(file);
+};
+
+function renderPhotos(){
+  photos.innerHTML="";
+  App.photos.forEach(p=>{
+    const img=document.createElement("img");
+    img.src=p;
+    photos.appendChild(img);
   });
 }
 
-/* ===================== INIT ===================== */
-Map.init();
-Point.load();
+/* ================= INIT ================= */
+App.Map.init();
 
 </script>
-
 </body>
 </html>
