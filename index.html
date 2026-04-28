@@ -26,7 +26,6 @@ body { margin:0; font-family:Arial; }
   border:none;
   padding:10px;
   border-radius:10px;
-  margin-bottom:5px;
 }
 
 .panel {
@@ -40,7 +39,6 @@ body { margin:0; font-family:Arial; }
   display:none;
   z-index:9999;
   height:33vh;
-  max-height:90vh;
   overflow-y:auto;
   box-shadow:0 -5px 20px rgba(0,0,0,0.2);
 }
@@ -70,17 +68,17 @@ body { margin:0; font-family:Arial; }
 <div id="map"></div>
 
 <div class="menu">
-  <button onclick="openMyPoints()">📂 Мои точки</button>
+  <button onclick="UI.openMyPoints()">📂 Мои точки</button>
 </div>
 
+<!-- PANELS -->
 <div class="panel" id="panel">
-  <div class="handle" onclick="togglePanel()">—</div>
+  <div class="handle" onclick="UI.toggle()">—</div>
 
   <h3 id="title">📍 Новая точка</h3>
   <div id="coords"></div>
 
   <select id="category"></select>
-
   <select id="access">
     <option>легковой</option>
     <option>внедорожник</option>
@@ -88,252 +86,211 @@ body { margin:0; font-family:Arial; }
     <option>лодка</option>
   </select>
 
-  <textarea id="desc" placeholder="Описание"></textarea>
+  <textarea id="desc"></textarea>
 
-  <button onclick="requestCamera()">📸 Фото</button>
+  <button onclick="UI.camera()">📸 Фото</button>
   <input type="file" id="camera" accept="image/*" capture="environment" hidden>
 
   <div class="photos" id="photos"></div>
 
-  <button onclick="saveDraft()">Сохранить</button>
-  <button onclick="closePanel()">Закрыть</button>
+  <button onclick="Point.save()">Сохранить</button>
 </div>
 
+<div class="panel" id="myPanel"></div>
+
 <div class="panel" id="infoPanel">
-  <div class="handle" onclick="closeInfo()">—</div>
+  <div class="handle" onclick="UI.closeInfo()">—</div>
   <div id="infoContent"></div>
 </div>
 
 <script>
 
-let map;
-let current = null;
-let tempMarker = null;
-let userMarker = null;
-let photos = [];
+/* ===================== STORAGE ===================== */
+const Storage = {
+  get(){ return JSON.parse(localStorage.getItem("points")||"[]"); },
+  set(v){ localStorage.setItem("points",JSON.stringify(v)); }
+};
 
-let editMode = false;
-let editId = null;
+/* ===================== MAP ===================== */
+const Map = {
+  init(){
+    this.map = L.map("map").setView([55,37],10);
 
-let activeMarker = null;
+    const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
+    const sat = L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",{
+      subdomains:["mt0","mt1","mt2","mt3"]
+    });
 
-/* =========================
-   CONTROLLER
-========================= */
-const MapController = {
+    osm.addTo(this.map);
+    L.control.layers({"OSM":osm,"SAT":sat}).addTo(this.map);
 
-  setActive(marker, data){
+    this.map.locate({watch:true});
 
-    this.clearActive();
+    this.map.on("locationfound",e=>{
+      if(this.user) this.map.removeLayer(this.user);
 
-    activeMarker = marker;
+      this.user = L.circleMarker(e.latlng,{
+        radius:8,color:"blue",fillOpacity:1
+      }).addTo(this.map);
+    });
 
-    if(marker && marker.getElement){
-      const el = marker.getElement();
-      if(el) el.classList.add("selected-marker");
-    }
-
-    current = { lat:data.lat, lng:data.lng };
-
-    this.center(data.lat, data.lng);
-  },
-
-  clearActive(){
-    if(activeMarker){
-      const el = activeMarker.getElement?.();
-      if(el) el.classList.remove("selected-marker");
-    }
-    activeMarker = null;
+    this.map.on("click",e=>{
+      Point.current = e.latlng;
+      UI.openPanel();
+      UI.addTempMarker(e.latlng);
+    });
   },
 
   center(lat,lng){
+    const zoom = this.map.getZoom();
+    const offset = window.innerHeight/6;
 
-    const zoom = map.getZoom();
-    const offset = window.innerHeight / 6;
-
-    const point = map.project([lat,lng], zoom).subtract([0,offset]);
-    const target = map.unproject(point, zoom);
-
-    map.setView(target, zoom, { animate:true });
+    const p = this.map.project([lat,lng],zoom).subtract([0,offset]);
+    this.map.setView(this.map.unproject(p,zoom),zoom,{animate:true});
   }
 };
 
-/* ICONS */
-const icons = {
-  "рыбалка":"🎣",
-  "платная рыбалка":"💰🎣",
-  "кемпинг":"⛺",
-  "пляж":"🏖️",
-  "опасно":"⚠️",
-  "родник":"💧",
-  "пирс":"🌉"
-};
+/* ===================== POINTS ===================== */
+const Point = {
+  current:null,
+  activeMarker:null,
+  tempMarker:null,
 
-function icon(cat){
-  return L.divIcon({
-    html:`<div style="font-size:22px">${icons[cat]||"📍"}</div>`,
-    className:""
-  });
-}
+  load(){
+    if(this.layer) Map.map.removeLayer(this.layer);
+    this.layer = L.layerGroup().addTo(Map.map);
 
-/* INIT */
-function init(){
-
-  map = L.map("map").setView([55,37],10);
-
-  const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
-
-  const sat = L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",{
-    subdomains:["mt0","mt1","mt2","mt3"]
-  });
-
-  osm.addTo(map);
-
-  L.control.layers({ "OSM":osm, "SAT":sat }).addTo(map);
-
-  /* =========================
-     🔵 ГЕОЛОКАЦИЯ ПОЛЬЗОВАТЕЛЯ
-  ========================= */
-  map.locate({
-    setView:false,
-    watch:true,
-    enableHighAccuracy:true
-  });
-
-  map.on("locationfound", e => {
-
-    const latlng = e.latlng;
-
-    if(userMarker){
-      map.removeLayer(userMarker);
-    }
-
-    userMarker = L.circleMarker(latlng,{
-      radius:8,
-      color:"blue",
-      fillColor:"blue",
-      fillOpacity:1
-    }).addTo(map);
-
-    userMarker.bindPopup("📍 Вы здесь");
-  });
-
-  map.on("click", e=>{
-
-    MapController.clearActive();
-
-    current = e.latlng;
-
-    if(tempMarker) map.removeLayer(tempMarker);
-
-    tempMarker = L.marker(current,{icon:icon("рыбалка")}).addTo(map);
-
-    MapController.center(current.lat,current.lng);
-
-    openPanel();
-  });
-
-  fillCategories();
-  PointStore.sync();
-}
-
-/* CATEGORY */
-function fillCategories(){
-  category.innerHTML="";
-  Object.keys(icons).forEach(c=>{
-    let o=document.createElement("option");
-    o.value=c;
-    o.innerText=`${icons[c]} ${c}`;
-    category.appendChild(o);
-  });
-}
-
-/* PHOTO */
-camera.onchange = e=>{
-  const file=e.target.files[0];
-  if(!file) return;
-
-  const r=new FileReader();
-  r.onload=ev=>{
-    photos.push(ev.target.result);
-    renderPhotos();
-  };
-  r.readAsDataURL(file);
-};
-
-function renderPhotos(){
-  photosEl.innerHTML="";
-  photos.forEach((p,i)=>{
-    let img=document.createElement("img");
-    img.src=p;
-    img.onclick=()=>{
-      photos.splice(i,1);
-      renderPhotos();
-    };
-    photosEl.appendChild(img);
-  });
-}
-
-/* STORE */
-const PointStore={
-  sync(){
-
-    const arr=JSON.parse(localStorage.getItem("points")||"[]");
-
-    if(window.layer){
-      window.layer.clearLayers();
-    } else {
-      window.layer=L.layerGroup().addTo(map);
-    }
-
-    arr.forEach(p=>{
-
-      const m=L.marker([p.lat,p.lng],{icon:icon(p.category)});
+    Storage.get().forEach(p=>{
+      const m = L.marker([p.lat,p.lng],{icon:Icon(p.category)}).addTo(this.layer);
 
       m.on("click",()=>{
-
-        MapController.setActive(m,p);
-
-        openInfo(p);
+        this.setActive(m,p);
       });
-
-      window.layer.addLayer(m);
     });
+  },
+
+  setActive(marker,p){
+
+    if(this.activeMarker){
+      this.activeMarker.getElement()?.classList.remove("selected-marker");
+    }
+
+    this.activeMarker = marker;
+    setTimeout(()=>{
+      marker.getElement()?.classList.add("selected-marker");
+    },10);
+
+    UI.openInfo(p);
+    Map.center(p.lat,p.lng);
+  },
+
+  save(){
+    let arr = Storage.get();
+
+    if(UI.editMode){
+      arr = arr.map(p=>{
+        if(p.id===UI.editId){
+          return {...p,
+            category:category.value,
+            access:access.value,
+            desc:desc.value,
+            photos:UI.photos
+          };
+        }
+        return p;
+      });
+    } else {
+      arr.push({
+        id:Date.now(),
+        lat:this.current.lat,
+        lng:this.current.lng,
+        category:category.value,
+        access:access.value,
+        desc:desc.value,
+        photos:UI.photos
+      });
+    }
+
+    Storage.set(arr);
+    this.load();
+    UI.closePanel();
   }
 };
 
-/* INFO */
-function openInfo(p){
+/* ===================== UI ===================== */
+const UI = {
+  editMode:false,
+  editId:null,
+  photos:[],
 
-  infoPanel.style.display="block";
+  openPanel(){
+    panel.style.display="block";
+  },
 
-  infoContent.innerHTML=`
-    <b>${icons[p.category]} ${p.category}</b><br>
-    📍 ${p.lat}, ${p.lng}<br>
-    📝 ${p.desc||""}<br>
-    ${(p.photos||[]).map(ph=>`<img src="${ph}" width="60">`).join("")}
-  `;
+  closePanel(){
+    panel.style.display="none";
+    this.editMode=false;
+  },
+
+  toggle(){
+    panel.style.height = panel.offsetHeight<300?"33vh":"10vh";
+  },
+
+  addTempMarker(latlng){
+    if(Point.tempMarker) Map.map.removeLayer(Point.tempMarker);
+    Point.tempMarker = L.marker(latlng,{icon:Icon("рыбалка")}).addTo(Map.map);
+  },
+
+  openInfo(p){
+    infoPanel.style.display="block";
+    infoContent.innerHTML=`
+      <b>${p.category}</b><br>
+      ${p.desc||""}<br>
+      ${(p.photos||[]).map(i=>`<img src="${i}" width="60">`).join("")}
+      <button onclick="UI.edit(${p.id})">✏️ Изменить</button>
+    `;
+  },
+
+  closeInfo(){
+    infoPanel.style.display="none";
+  },
+
+  edit(id){
+    const p = Storage.get().find(x=>x.id===id);
+
+    this.editMode=true;
+    this.editId=id;
+
+    Point.current = {lat:p.lat,lng:p.lng};
+
+    category.value=p.category;
+    access.value=p.access;
+    desc.value=p.desc;
+
+    this.photos = p.photos||[];
+
+    this.closeInfo();
+    Map.center(p.lat,p.lng);
+    this.openPanel();
+  },
+
+  camera(){
+    camera.click();
+  }
+};
+
+/* ===================== ICON ===================== */
+function Icon(c){
+  return L.divIcon({
+    html:`<div style="font-size:22px">${c}</div>`
+  });
 }
 
-function closeInfo(){
-  infoPanel.style.display="none";
-}
-
-/* PANEL */
-function openPanel(){
-  panel.style.display="block";
-  coords.innerText=current.lat.toFixed(5)+","+current.lng.toFixed(5);
-}
-
-function closePanel(){
-  panel.style.display="none";
-  editMode=false;
-  editId=null;
-}
-
-/* INIT */
-init();
+/* ===================== INIT ===================== */
+Map.init();
+Point.load();
 
 </script>
+
 </body>
 </html>
