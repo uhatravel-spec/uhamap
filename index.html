@@ -131,8 +131,6 @@ select, textarea, button {
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-const API = "YOUR_API_URL";
-
 let map;
 let current = null;
 let tempMarker = null;
@@ -141,10 +139,65 @@ let photos = [];
 
 let editMode = false;
 let editId = null;
-
 let activeMarker = null;
 
-/* PANEL */
+/* =========================
+   🧠 MAP CONTROLLER (НОВЫЙ СЛОЙ)
+========================= */
+const MapController = {
+
+  setActive(marker, data){
+    this.clearActive();
+
+    activeMarker = marker;
+
+    if(marker && marker.getElement){
+      const el = marker.getElement();
+      if(el) el.classList.add("selected-marker");
+    }
+
+    current = { lat: data.lat, lng: data.lng };
+
+    this.center(data.lat, data.lng);
+  },
+
+  clearActive(){
+    if(activeMarker && activeMarker.getElement){
+      const el = activeMarker.getElement();
+      if(el) el.classList.remove("selected-marker");
+    }
+    activeMarker = null;
+  },
+
+  center(lat, lng){
+    const zoom = map.getZoom();
+    const offset = window.innerHeight / 6;
+
+    const point = map.project([lat,lng], zoom).subtract([0, offset]);
+    const newLatLng = map.unproject(point, zoom);
+
+    map.setView(newLatLng, zoom, { animate:true });
+  },
+
+  openInfo(p){
+    const box = document.getElementById("infoContent");
+
+    box.innerHTML = `
+      <b>${icons[p.category]} ${p.category}</b><br>
+      📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
+      🚗 ${p.access}<br>
+      📝 ${p.desc || ""}<br>
+      ${(p.photos||[]).map(ph=>`<img src="${ph}" width="60">`).join("")}
+      <button onclick="editPoint(${p.id})">✏️ Изменить</button>
+      <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
+    `;
+
+    infoPanel.style.display="block";
+  }
+};
+
+/* ========================= */
+
 const panelEl = document.getElementById("panel");
 let collapsed = false;
 
@@ -155,18 +208,6 @@ function setPanel(h){
 function togglePanel(){
   collapsed = !collapsed;
   setPanel(collapsed ? 0.1 : 0.33);
-}
-
-/* 🔥 FIX: без изменения zoom */
-function centerWithOffset(lat,lng){
-  const zoom = map.getZoom();
-
-  const offset = window.innerHeight * 0.16;
-
-  const point = map.project([lat,lng], zoom).subtract([0, offset]);
-  const newLatLng = map.unproject(point, zoom);
-
-  map.setView(newLatLng, zoom, {animate:true});
 }
 
 /* ICONS */
@@ -187,55 +228,31 @@ function icon(cat){
   });
 }
 
-/* 🔥 FIX подсветки */
-function highlightMarker(marker){
-
-  if(activeMarker && activeMarker.getElement()){
-    activeMarker.getElement().classList.remove("selected-marker");
-  }
-
-  activeMarker = marker;
-
-  setTimeout(()=>{
-    const el = marker.getElement();
-    if(el){
-      el.classList.add("selected-marker");
-    }
-  },0);
-}
-
 /* INIT */
 function init(){
 
   map = L.map('map').setView([55,37],10);
 
   const normal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-  const sat = L.tileLayer(
-    'https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-    { subdomains:['mt0','mt1','mt2','mt3'] }
-  );
+  const sat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    subdomains:['mt0','mt1','mt2','mt3']
+  });
 
   normal.addTo(map);
+
   L.control.layers({
     "Обычная":normal,
     "Спутник":sat
   }).addTo(map);
 
   map.on("click", e=>{
-
-    if(activeMarker && activeMarker.getElement()){
-      activeMarker.getElement().classList.remove("selected-marker");
-      activeMarker = null;
-    }
-
     current = e.latlng;
 
     if(tempMarker) map.removeLayer(tempMarker);
 
     tempMarker = L.marker(current,{icon: icon("рыбалка")}).addTo(map);
 
-    centerWithOffset(current.lat,current.lng);
-
+    MapController.center(current.lat, current.lng);
     openPanel();
   });
 
@@ -271,16 +288,11 @@ camera.onchange=e=>{
 };
 
 function renderPhotos(){
-  const photosEl = document.getElementById("photos");
   photosEl.innerHTML="";
-
   photos.forEach((p,i)=>{
     let img=document.createElement("img");
     img.src=p;
-    img.onclick=()=>{
-      photos.splice(i,1);
-      renderPhotos();
-    };
+    img.onclick=()=>{ photos.splice(i,1); renderPhotos(); };
     photosEl.appendChild(img);
   });
 }
@@ -290,7 +302,13 @@ function saveDraft(){
   let arr=JSON.parse(localStorage.getItem("points")||"[]");
 
   if(editMode){
-    arr=arr.map(p=>p.id===editId ? {...p,category:category.value,access:access.value,desc:desc.value,photos} : p);
+    arr=arr.map(p=>p.id===editId ? {
+      ...p,
+      category:category.value,
+      access:access.value,
+      desc:desc.value,
+      photos
+    } : p);
   } else {
     arr.push({
       id:Date.now(),
@@ -310,27 +328,6 @@ function saveDraft(){
   closePanel();
 }
 
-/* INFO */
-function openInfo(p){
-  const box = document.getElementById("infoContent");
-
-  box.innerHTML = `
-    <b>${icons[p.category]} ${p.category}</b><br>
-    📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
-    🚗 ${p.access}<br>
-    📝 ${p.desc || ""}<br>
-    ${(p.photos||[]).map(ph=>`<img src="${ph}" width="60">`).join("")}
-    <button onclick="editPoint(${p.id})">✏️ Изменить</button>
-    <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
-  `;
-
-  infoPanel.style.display="block";
-}
-
-function closeInfo(){
-  infoPanel.style.display="none";
-}
-
 /* STORE */
 const PointStore={
   sync(){
@@ -346,10 +343,8 @@ const PointStore={
       const m=L.marker([p.lat,p.lng],{icon:icon(p.category)});
 
       m.on("click",()=>{
-        highlightMarker(m);
-        current={lat:p.lat,lng:p.lng};
-        centerWithOffset(p.lat,p.lng);
-        openInfo(p);
+        MapController.setActive(m, p);
+        MapController.openInfo(p);
       });
 
       window.layer.addLayer(m);
@@ -357,41 +352,7 @@ const PointStore={
   }
 };
 
-/* MY POINTS */
-function openMyPoints(){
-  const box=myPanel;
-  box.style.display="block";
-  box.innerHTML="<div class='handle' onclick='toggleMyPanel()'>—</div><h3>Мои точки</h3>";
-
-  const arr=JSON.parse(localStorage.getItem("points")||"[]");
-
-  arr.forEach(p=>{
-    const d=document.createElement("div");
-
-    d.innerHTML=`
-      <hr>
-      ${icons[p.category]} ${p.category}<br>
-      ${p.desc||""}<br>
-      <button onclick="focusPoint(${p.lat},${p.lng})">Показать</button>
-      <button onclick="editPoint(${p.id})">Изменить</button>
-      <button onclick="deletePoint(${p.id})">Удалить</button>
-    `;
-
-    box.appendChild(d);
-  });
-
-  box.style.height = "33vh";
-}
-
-function toggleMyPanel(){
-  myPanel.style.height = myPanel.offsetHeight < window.innerHeight*0.2 ? "33vh" : "10vh";
-}
-
-function focusPoint(lat,lng){
-  centerWithOffset(lat,lng);
-}
-
-/* 🔥 FIX edit */
+/* EDIT */
 function editPoint(id){
   const arr=JSON.parse(localStorage.getItem("points")||"[]");
   const p=arr.find(x=>x.id===id);
@@ -411,35 +372,16 @@ function editPoint(id){
 
   title.innerText="✏️ Редактирование";
 
-  if(tempMarker){
-    map.removeLayer(tempMarker);
-    tempMarker=null;
-  }
-
   closeInfo();
-  centerWithOffset(p.lat,p.lng);
+  MapController.center(p.lat,p.lng);
   openPanel();
-}
-
-function deletePoint(id){
-  let arr=JSON.parse(localStorage.getItem("points")||"[]");
-  arr=arr.filter(x=>x.id!==id);
-
-  localStorage.setItem("points",JSON.stringify(arr));
-
-  PointStore.sync();
-  closeInfo();
-  openMyPoints();
 }
 
 /* PANEL */
 function openPanel(){
   panel.style.display="block";
   setPanel(0.33);
-
-  if(current){
-    coords.innerText=current.lat.toFixed(5)+", "+current.lng.toFixed(5);
-  }
+  coords.innerText=current.lat.toFixed(5)+", "+current.lng.toFixed(5);
 }
 
 function closePanel(){
@@ -449,15 +391,7 @@ function closePanel(){
   title.innerText="📍 Новая точка";
 }
 
-/* KEYBOARD */
-document.addEventListener("touchstart",e=>{
-  if(!e.target.closest("textarea")){
-    document.activeElement.blur();
-  }
-});
-
-desc.onfocus=()=> setPanel(0.9);
-
+/* INIT */
 init();
 
 </script>
