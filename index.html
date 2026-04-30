@@ -233,29 +233,19 @@ function togglePanel(){
 }
 
 /* OFFSET */
-function centerWithOffset(lat, lng, forcePanel = false){
+function centerWithTop(lat, lng){
 
   const size = map.getSize();
 
-  // базовое смещение (всегда вверх)
-  let offsetY = size.y * 0.30;
+  const offsetY = size.y * 0.30;
 
-  // если есть любая открытая панель — сильнее вверх
-  if (
-    forcePanel ||
-    ui.open === "my" ||
-    ui.open === "create" ||
-    ui.open === "info"
-  ) {
-    offsetY = size.y * 0.45;
-  }
+  const point = map.project([lat, lng], map.getZoom());
 
-  const point = map.project([lat, lng], map.getZoom())
-    .subtract([0, offsetY]);
+  const targetPoint = point.subtract([0, offsetY]);
 
-  const target = map.unproject(point, map.getZoom());
+  const targetLatLng = map.unproject(targetPoint, map.getZoom());
 
-  map.flyTo(target, map.getZoom(), {
+  map.setView(targetLatLng, map.getZoom(), {
     animate: true,
     duration: 0.6
   });
@@ -320,7 +310,7 @@ map.on("locationfound", e => {
   // 🔥 1. первый запуск — мягкий центр
   if (!initialLocationSet) {
 
-    centerWithOffset(latlng.lat, latlng.lng, ui.open !== null);
+    centerWithTop(latlng.lat, latlng.lng, ui.open !== null);
     initialLocationSet = true;
   }
 
@@ -367,14 +357,19 @@ map.on("locationfound", e => {
 function enableCreateMode(){
 
   createMode = true;
-  pointConfirmed = false; // 🔥 ДОБАВИЛИ
+  pointConfirmed = true;
+
+  const center = map.getCenter();
+
+  current = {
+    lat: center.lat,
+    lng: center.lng
+  };
 
   if (tempMarker) {
     map.removeLayer(tempMarker);
     tempMarker = null;
   }
-
-  current = map.getCenter();
 
   tempMarker = L.marker(current, {
     icon: icon("новая_точка"),
@@ -383,8 +378,6 @@ function enableCreateMode(){
 
   tempMarker.on("dragend", (e) => {
     current = e.target.getLatLng();
-    pointConfirmed = true; // 🔥 если двигал — значит выбрал
-    current = { lat: current.lat, lng: current.lng };
   });
 
   openPanel();
@@ -545,7 +538,7 @@ const PointStore = {
         current = { lat: p.lat, lng: p.lng };
 
         // 4. центр карты
-        centerWithOffset(p.lat, p.lng, true);
+        centerWithTop(p.lat, p.lng, true);
 
         // 5. инфо панель
         openInfo(p);
@@ -630,7 +623,7 @@ function openMyPoints(){
       PointStore.sync();   // обновить карту
       openMyPoints();      // обновить список
 
-      centerWithOffset(p.lat, p.lng, true);
+      centerWithTop(p.lat, p.lng, true);
     };
 
     box.appendChild(d);
@@ -649,7 +642,7 @@ function toggleMyPanel(){
 }
 
 function focusPoint(lat,lng){
-  centerWithOffset(lat,lng, true);
+  centerWithTop(lat,lng, true);
 }
 
 /* EDIT */
@@ -673,7 +666,7 @@ function editPoint(id){
   title.innerText="✏️ Редактирование";
 
   closeInfo();
-  centerWithOffset(p.lat,p.lng);
+  centerWithTop(p.lat,p.lng);
   openPanel();
 }
 
@@ -746,6 +739,7 @@ desc.addEventListener("blur", () => {
 
 function publish(){
   saveDraft();
+  alert("✔ Точка сохранена");
 }
 init();
 
