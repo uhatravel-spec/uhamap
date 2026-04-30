@@ -215,13 +215,9 @@ function togglePanel(){
 }
 
 /* OFFSET */
-function centerWithOffset(lat, lng){
+function centerWithOffset(lat, lng, withPanel = false){
 
-  let offsetY = window.innerHeight * 0.25;
-
-  if (panelEl.style.display === "block") {
-    offsetY = window.innerHeight * 0.45;
-  }
+  const offsetY = withPanel ? 300 : 120;
 
   const point = map.project([lat, lng], map.getZoom())
     .subtract([0, offsetY]);
@@ -294,7 +290,7 @@ map.on("locationfound", e => {
   // 🔥 1. первый запуск — мягкий центр
   if (!initialLocationSet) {
 
-    centerWithOffset(latlng.lat, latlng.lng);
+    centerWithOffset(latlng.lat, latlng.lng, false);
     initialLocationSet = true;
   }
 
@@ -519,7 +515,7 @@ const PointStore = {
         current = { lat: p.lat, lng: p.lng };
 
         // 4. центр карты
-        centerWithOffset(p.lat, p.lng);
+        centerWithOffset(p.lat, p.lng, true);
 
         // 5. инфо панель
         openInfo(p);
@@ -602,7 +598,7 @@ function openMyPoints(){
       PointStore.sync();   // обновить карту
       openMyPoints();      // обновить список
 
-      centerWithOffset(p.lat, p.lng);
+      centerWithOffset(p.lat, p.lng, true);
     };
 
     box.appendChild(d);
@@ -621,7 +617,7 @@ function toggleMyPanel(){
 }
 
 function focusPoint(lat,lng){
-  centerWithOffset(lat,lng);
+  centerWithOffset(lat,lng, true);
 }
 
 /* EDIT */
