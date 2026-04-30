@@ -250,8 +250,8 @@ function centerWithTop(lat, lng, withPanel = false) {
 
   const point = map.project([lat, lng], zoom);
 
-  // 👉 ВАЖНО: СДВИГАЕМ ВНИЗ, а не вверх
-  const targetPoint = point.add([0, offsetY]);
+  // ✅ ВАЖНО: двигаем ВВЕРХ (а не вниз)
+  const targetPoint = point.subtract([0, offsetY]);
 
   const targetLatLng = map.unproject(targetPoint, zoom);
 
@@ -283,7 +283,7 @@ function icon(cat){
 /* INIT */
 function init(){
 
-  map = L.map('map').centerWithTop([55,37],10);
+  map = L.map('map').setView([55,37],10);
 
   const normal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
 
@@ -306,13 +306,13 @@ map.on("dragstart", ()=> {
   userZoomChanged = true;
 });
 
-  map.locate({
-    centerWithTop: false,
-    watch: true,
-    enableHighAccuracy: true,
-    maximumAge: 0,
-    timeout: 10000
-  });
+map.locate({
+  setView: false,
+  watch: true,
+  enableHighAccuracy: true,
+  maximumAge: 0,
+  timeout: 10000
+});
 
 map.on("locationfound", e => {
 
