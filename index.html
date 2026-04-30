@@ -240,9 +240,7 @@ function centerWithTop(lat, lng, withPanel = false) {
   const zoom = map.getZoom();
   const size = map.getSize();
 
-  const targetPercent = 0.25;
-
-  let offsetY = size.y * targetPercent;
+  const offsetY = size.y * 0.6;
 
   if (withPanel) {
     offsetY += size.y * 0.15;
