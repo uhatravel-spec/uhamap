@@ -195,7 +195,7 @@ function togglePanel(){
 /* OFFSET */
 function centerWithOffset(lat, lng){
 
-  const offsetY = window.innerHeight * 0.22; 
+  const offsetY = window.innerHeight * 0.38;
   // ↑ точка будет выше центра экрана (чтобы панель не перекрывала)
 
   const point = map.project([lat, lng], map.getZoom())
@@ -574,6 +574,7 @@ function openMyPoints(){
       openMyPoints();      // обновить список
 
       centerWithOffset(p.lat, p.lng);
+// openInfo(p);  // ← отключили открытие инфо
       openInfo(p);
     };
 
