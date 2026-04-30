@@ -195,7 +195,26 @@ function togglePanel(){
 /* OFFSET */
 function centerWithOffset(lat, lng){
 
-  const offsetY = window.innerHeight * 0.25;
+  function centerWithOffset(lat, lng){
+
+  // базовое смещение
+  let offsetY = window.innerHeight * 0.25;
+
+  // 🔥 если открыта панель "Мои точки" — увеличиваем смещение
+  if (myPanel.style.display === "block") {
+    offsetY = window.innerHeight * 0.40;
+  }
+
+  const point = map.project([lat, lng], map.getZoom())
+    .subtract([0, offsetY]);
+
+  const target = map.unproject(point, map.getZoom());
+
+  map.flyTo(target, 15, {
+    animate: true,
+    duration: 0.6
+  });
+}
   // ↑ точка будет выше центра экрана (чтобы панель не перекрывала)
 
   const point = map.project([lat, lng], map.getZoom())
@@ -534,7 +553,13 @@ function openMyPoints(){
   myPanel.style.display = "block";
   const box = myPanel;
 
-  box.innerHTML = "<div class='handle' onclick='toggleMyPanel()'>—</div><h3>Мои точки</h3>";
+  box.innerHTML = `
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div class='handle' onclick='toggleMyPanel()'>—</div>
+    <button onclick="closeMyPanel()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
+  </div>
+  <h3>Мои точки</h3>
+`;
 
   const arr = JSON.parse(localStorage.getItem("points") || "[]");
 
@@ -581,7 +606,9 @@ function openMyPoints(){
 }
 
 function toggleMyPanel(){
-
+  function closeMyPanel(){
+  myPanel.style.display = "none";
+}
   if (myPanel.style.display === "none" || myPanel.style.display === "") {
     myPanel.style.display = "block";
     myPanel.style.height = "33vh";
