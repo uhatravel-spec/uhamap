@@ -321,7 +321,7 @@ map.on("locationfound", e => {
   // 🔥 1. первый запуск — мягкий центр
   if (!initialLocationSet) {
 
-    centerWithTop(latlng.lat, latlng.lng, ui.open !== null);
+    centerWithTop(latlng.lat, latlng.lng, false);
     initialLocationSet = true;
   }
 
