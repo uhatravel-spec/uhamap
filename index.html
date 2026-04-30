@@ -237,23 +237,27 @@ function centerWithTop(lat, lng) {
 
   const zoom = map.getZoom();
 
-  // 1. ставим в центр
+  // 1. сначала ставим в центр
   map.setView([lat, lng], zoom, { animate: false });
 
-  const size = map.getSize();
+  // ❗ ЖДЁМ ОДИН ТИК, чтобы карта реально обновилась
+  setTimeout(() => {
 
-  // 🎯 хотим точку на 25% сверху
-  const targetY = size.y * 0.25;
+    const size = map.getSize();
 
-  const point = map.latLngToContainerPoint([lat, lng]);
+    // 🎯 хотим точку на 25% сверху
+    const targetY = size.y * 0.25;
 
-  const offset = point.y - targetY;
+    const point = map.latLngToContainerPoint([lat, lng]);
 
-  // 2. сдвигаем карту
-  map.panBy([0, offset], {
-    animate: true,
-    duration: 0.6
-  });
+    const offset = point.y - targetY;
+
+    map.panBy([0, offset], {
+      animate: true,
+      duration: 0.6
+    });
+
+  }, 50);
 }
 
 /* ICONS */
