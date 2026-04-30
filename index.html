@@ -203,6 +203,21 @@ function renderUI(){
     infoPanel.style.display = "block";
   }
 }
+function closeMyPanel(){
+  myPanel.style.display = "none";
+  ui.open = null;
+  renderUI();
+}
+
+function closeInfoPanel(){
+  infoPanel.style.display = "none";
+  ui.open = null;
+}
+
+function closeCreatePanel(){
+  panelEl.style.display = "none";
+  ui.open = null;
+}
 
 function togglePanel(){
   panelOpen = !panelOpen;
@@ -217,14 +232,22 @@ function togglePanel(){
 /* OFFSET */
 function centerWithOffset(lat, lng, withPanel = false){
 
-  const offsetY = withPanel ? 300 : 120;
+  const mapSize = map.getSize();
+
+  // базовое смещение вверх (в пикселях)
+  let offsetY = mapSize.y * 0.25;
+
+  // если открыта панель — увеличиваем смещение
+  if (withPanel || ui.open === "my" || ui.open === "create" || ui.open === "info") {
+    offsetY = mapSize.y * 0.40;
+  }
 
   const point = map.project([lat, lng], map.getZoom())
     .subtract([0, offsetY]);
 
   const target = map.unproject(point, map.getZoom());
 
-  map.flyTo(target, 15, {
+  map.flyTo(target, map.getZoom(), {
     animate: true,
     duration: 0.6
   });
@@ -554,6 +577,8 @@ function openMyPoints(){
   ui.open = "my";
   renderUI();
   const box = myPanel;
+  panelEl.style.display = "none";
+  infoPanel.style.display = "none";
 
   box.innerHTML = `
   <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -671,7 +696,6 @@ function openPanel(){
 
 function closePanel(){
 
-  // если это НЕ редактирование — удаляем временную точку
   if (!editMode && tempMarker) {
     map.removeLayer(tempMarker);
     tempMarker = null;
@@ -679,17 +703,21 @@ function closePanel(){
   }
 
   createMode = false;
-  panelEl.style.display="none";
+
+  panelEl.style.display = "none";
+  ui.open = null;
   panelOpen = false;
 
   editMode = false;
   editId = null;
 
   title.innerText = "📍 Новая точка";
-}
 
+  renderUI();
+}
 function closeInfo(){
-  panelEl.style.display = "none";
+  infoPanel.style.display = "none";
+  ui.open = null;
   panelOpen = false;
   activePointId = null;
 }
