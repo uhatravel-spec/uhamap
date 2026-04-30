@@ -233,26 +233,22 @@ function togglePanel(){
 }
 
 /* OFFSET */
-function centerWithTop(lat, lng, withPanel = false) {
-
-  if (!map) return;
+function centerWithTop(lat, lng) {
 
   const zoom = map.getZoom();
-  const size = map.getSize();
 
-  const offsetY = size.y * 0.6;
+  // 🔥 реальная видимая высота экрана
+  const height = window.innerHeight;
 
-  if (withPanel) {
-    offsetY += size.y * 0.15;
-  }
+  // 🎯 хотим точку на 30% сверху
+  const targetY = height * 0.30;
 
   const point = map.project([lat, lng], zoom);
 
-  const targetPoint = point.add([0, offsetY]);
+  const targetPoint = point.subtract([0, targetY]);
 
   const targetLatLng = map.unproject(targetPoint, zoom);
 
-  // 🔥 важно: без flyTo для теста
   map.setView(targetLatLng, zoom);
 }
 
@@ -752,3 +748,4 @@ init();
 </script>
 </body>
 </html>
+
