@@ -268,12 +268,17 @@ map.on("dragstart", ()=> {
   // 🔥 1. первый запуск — мягкий центр
   if (!initialLocationSet) {
 
-    const offset = window.innerHeight * 0.18;
+  const offsetY = window.innerHeight * 0.35;
 
-    centerWithOffset(latlng.lat, latlng.lng);
+  const point = map.project([latlng.lat, latlng.lng], 14)
+    .subtract([0, offsetY]);
 
-    initialLocationSet = true;
-  }
+  const target = map.unproject(point, 14);
+
+  map.setView(target, 14); // без анимации, стабильный старт
+
+  initialLocationSet = true;
+}
 
   // 🔵 2. маркер пользователя
   if (!userMarker) {
