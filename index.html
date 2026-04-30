@@ -237,19 +237,25 @@ function centerWithTop(lat, lng) {
 
   const zoom = map.getZoom();
 
+  // 1. ставим в центр
+  map.setView([lat, lng], zoom, { animate: false });
+
   const size = map.getSize();
 
-  // 🎯 верхняя зона экрана (25%)
-  const offsetY = size.y * 0.25;
+  // 🎯 хотим точку на 25% сверху
+  const targetY = size.y * 0.25;
 
-  const point = map.project([lat, lng], zoom);
+  const point = map.latLngToContainerPoint([lat, lng]);
 
-  const targetPoint = point.subtract([0, offsetY]);
+  const offset = point.y - targetY;
 
-  const targetLatLng = map.unproject(targetPoint, zoom);
-
-  map.setView(targetLatLng, zoom);
+  // 2. сдвигаем карту
+  map.panBy([0, offset], {
+    animate: true,
+    duration: 0.6
+  });
 }
+
 /* ICONS */
 const icons = {
   "новая_точка":"📌",
@@ -272,7 +278,11 @@ function icon(cat){
 /* INIT */
 function init(){
 
-  map = L.map('map').setView([55,37],10);
+  map = L.map('map', {
+    center: [55, 37],
+    zoom: 10,
+    zoomControl: true
+  });
 
   const normal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
 
@@ -296,8 +306,9 @@ map.on("dragstart", ()=> {
 });
 
 map.locate({
-  watch: false,              // ❗ КЛЮЧЕВО
+  watch: true,
   enableHighAccuracy: true,
+  setView: false,
   maximumAge: 0,
   timeout: 10000
 });
@@ -306,14 +317,19 @@ let geoSet = false;
 
 map.on("locationfound", e => {
 
-  if (geoSet) return;   // ❗ только первый раз
-
   const latlng = e.latlng;
 
-  centerWithTop(latlng.lat, latlng.lng);
+  // 🔥 первый раз — центрируем ПРАВИЛЬНО
+  if (!geoSet) {
 
-  geoSet = true;
+    setTimeout(() => {
+      centerWithTop(latlng.lat, latlng.lng);
+    }, 100);
 
+    geoSet = true;
+  }
+
+  // 🔵 маркер пользователя
   if (!userMarker) {
     userMarker = L.marker(latlng, {
       icon: L.divIcon({
@@ -321,7 +337,10 @@ map.on("locationfound", e => {
         html: `<div class="user-ring"></div>`
       })
     }).addTo(map);
+  } else {
+    userMarker.setLatLng(latlng);
   }
+
 });
   map.on("click", e => {
 
