@@ -235,30 +235,27 @@ function togglePanel(){
 /* OFFSET */
 function centerWithTop(lat, lng, withPanel = false) {
 
+  if (!map) return;
+
   const zoom = map.getZoom();
   const size = map.getSize();
 
-  // 🎯 точка должна быть на 25% сверху
   const targetPercent = 0.25;
 
   let offsetY = size.y * targetPercent;
 
-  // 📦 если панель открыта — добавляем её влияние
   if (withPanel) {
     offsetY += size.y * 0.15;
   }
 
   const point = map.project([lat, lng], zoom);
 
-  // ✅ ВАЖНО: двигаем ВВЕРХ (а не вниз)
   const targetPoint = point.subtract([0, offsetY]);
 
   const targetLatLng = map.unproject(targetPoint, zoom);
 
-  map.flyTo(targetLatLng, zoom, {
-    animate: true,
-    duration: 0.6
-  });
+  // 🔥 важно: без flyTo для теста
+  map.setView(targetLatLng, zoom);
 }
 
 /* ICONS */
@@ -307,9 +304,9 @@ map.on("dragstart", ()=> {
 });
 
 map.locate({
-  setView: false,
   watch: true,
   enableHighAccuracy: true,
+  setView: false,   // 🔥 ВАЖНО: запрещаем Leaflet сам центрировать карту
   maximumAge: 0,
   timeout: 10000
 });
