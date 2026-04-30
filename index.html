@@ -133,6 +133,7 @@ select, textarea, button {
   <input type="file" id="camera" accept="image/*" capture="environment">
 
   <div class="photos" id="photos"></div>
+  <div id="photoStatus" style="font-size:12px;color:gray;"></div>
 
   <button onclick="saveDraft()">Сохранить</button>
   <button onclick="publish()">Опубликовать</button>
@@ -451,22 +452,24 @@ camera.onchange = e => {
   const file = e.target.files[0];
   if (!file) return;
 
+  const status = document.getElementById("photoStatus");
+  status.innerText = "📸 Загрузка фото...";
+
   const reader = new FileReader();
 
   reader.onload = ev => {
 
-    // ✅ добавляем фото в текущий массив
     photos.push(ev.target.result);
 
     renderPhotos();
 
-    // ✅ КРИТИЧНО: сброс input (иначе ломается повторное сохранение)
+    status.innerText = "✅ Фото загружено";
+
     camera.value = "";
   };
 
   reader.readAsDataURL(file);
 };
-
 function renderPhotos(){
   photosEl.innerHTML="";
   photos.forEach((p,i)=>{
@@ -481,6 +484,10 @@ function renderPhotos(){
 function saveDraft(){
 
   if (!current || !current.lat || !current.lng) {
+  if (document.getElementById("photoStatus").innerText === "📸 Загрузка фото...") {
+  alert("Фото ещё загружается, подожди");
+  return;
+}
   alert("Сначала укажи точку на карте");
   return;
 }
@@ -777,4 +784,3 @@ init();
 </script>
 </body>
 </html>
-
