@@ -173,13 +173,35 @@ const access = document.getElementById("access");
 const desc = document.getElementById("desc");
 
 /* PANEL */
+const ui = {
+  open: null // "create" | "my" | "info" | null
+};
 const panelEl = document.getElementById("panel");
 const infoPanel = document.getElementById("infoPanel");
 const myPanel = document.getElementById("myPanel");
-
+const title = document.getElementById("title");
+const coords = document.getElementById("coords");
 
 function setPanel(h){
   panelEl.style.height = (window.innerHeight * h) + "px";
+}
+function renderUI(){
+
+  panelEl.style.display = "none";
+  myPanel.style.display = "none";
+  infoPanel.style.display = "none";
+
+  if (ui.open === "create") {
+    panelEl.style.display = "block";
+  }
+
+  if (ui.open === "my") {
+    myPanel.style.display = "block";
+  }
+
+  if (ui.open === "info") {
+    infoPanel.style.display = "block";
+  }
 }
 
 function togglePanel(){
@@ -195,14 +217,10 @@ function togglePanel(){
 /* OFFSET */
 function centerWithOffset(lat, lng){
 
-  function centerWithOffset(lat, lng){
-
-  // базовое смещение
   let offsetY = window.innerHeight * 0.25;
 
-  // 🔥 если открыта панель "Мои точки" — увеличиваем смещение
-  if (myPanel.style.display === "block") {
-    offsetY = window.innerHeight * 0.40;
+  if (panelEl.style.display === "block") {
+    offsetY = window.innerHeight * 0.45;
   }
 
   const point = map.project([lat, lng], map.getZoom())
@@ -215,18 +233,7 @@ function centerWithOffset(lat, lng){
     duration: 0.6
   });
 }
-  // ↑ точка будет выше центра экрана (чтобы панель не перекрывала)
 
-  const point = map.project([lat, lng], map.getZoom())
-    .subtract([0, offsetY]);
-
-  const target = map.unproject(point, map.getZoom());
-
-  map.flyTo(target, 15, {
-    animate: true,
-    duration: 0.6
-  });
-}
 /* ICONS */
 const icons = {
   "новая_точка":"📌",
@@ -280,17 +287,16 @@ map.on("dragstart", ()=> {
     timeout: 10000
   });
 
-  map.on("locationfound", e => {
+map.on("locationfound", e => {
 
   const latlng = e.latlng;
 
   // 🔥 1. первый запуск — мягкий центр
   if (!initialLocationSet) {
 
-  centerWithOffset(latlng.lat, latlng.lng);
-
-  initialLocationSet = true;
-}
+    centerWithOffset(latlng.lat, latlng.lng);
+    initialLocationSet = true;
+  }
 
   // 🔵 2. маркер пользователя
   if (!userMarker) {
@@ -303,8 +309,8 @@ map.on("dragstart", ()=> {
   } else {
     userMarker.setLatLng(latlng);
   }
-});
 
+});
   map.on("click", e => {
 
     if (!createMode) return;
@@ -549,8 +555,8 @@ function highlightMarker(marker){
 
 /* MY POINTS */
 function openMyPoints(){
-
-  myPanel.style.display = "block";
+  ui.open = "my";
+  renderUI();
   const box = myPanel;
 
   box.innerHTML = `
@@ -606,9 +612,6 @@ function openMyPoints(){
 }
 
 function toggleMyPanel(){
-  function closeMyPanel(){
-  myPanel.style.display = "none";
-}
   if (myPanel.style.display === "none" || myPanel.style.display === "") {
     myPanel.style.display = "block";
     myPanel.style.height = "33vh";
@@ -660,8 +663,9 @@ function deletePoint(id){
 
 /* PANEL */
 function openPanel(){
-  panel.style.display="block";
-  setPanel(0.33);
+  ui.open = "create";
+  renderUI();
+
   panelOpen = true;
 
   if(current){
@@ -679,7 +683,7 @@ function closePanel(){
   }
 
   createMode = false;
-  panel.style.display="none";
+  panelEl.style.display="none";
   panelOpen = false;
 
   editMode = false;
@@ -689,7 +693,7 @@ function closePanel(){
 }
 
 function closeInfo(){
-  infoPanel.style.display = "none";
+  panelEl.style.display = "none";
   panelOpen = false;
   activePointId = null;
 }
