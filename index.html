@@ -233,23 +233,34 @@ function togglePanel(){
 }
 
 /* OFFSET */
-function centerWithTop(lat, lng){
+function centerWithTop(lat, lng, withPanel = false) {
 
+  const zoom = map.getZoom();
   const size = map.getSize();
 
-  const offsetY = size.y * 0.30;
+  // 🎯 точка должна быть на 25% сверху
+  const targetPercent = 0.25;
 
-  const point = map.project([lat, lng], map.getZoom());
+  let offsetY = size.y * targetPercent;
 
-  const targetPoint = point.subtract([0, offsetY]);
+  // 📦 если панель открыта — добавляем её влияние
+  if (withPanel) {
+    offsetY += size.y * 0.15;
+  }
 
-  const targetLatLng = map.unproject(targetPoint, map.getZoom());
+  const point = map.project([lat, lng], zoom);
 
-  map.setView(targetLatLng, map.getZoom(), {
+  // 👉 ВАЖНО: СДВИГАЕМ ВНИЗ, а не вверх
+  const targetPoint = point.add([0, offsetY]);
+
+  const targetLatLng = map.unproject(targetPoint, zoom);
+
+  map.flyTo(targetLatLng, zoom, {
     animate: true,
     duration: 0.6
   });
 }
+
 /* ICONS */
 const icons = {
   "новая_точка":"📌",
@@ -272,7 +283,7 @@ function icon(cat){
 /* INIT */
 function init(){
 
-  map = L.map('map').setView([55,37],10);
+  map = L.map('map').centerWithTop([55,37],10);
 
   const normal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
 
@@ -296,7 +307,7 @@ map.on("dragstart", ()=> {
 });
 
   map.locate({
-    setView: false,
+    centerWithTop: false,
     watch: true,
     enableHighAccuracy: true,
     maximumAge: 0,
