@@ -104,7 +104,10 @@ select, textarea, button {
 </div>
 
 <div class="panel" id="panel">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
   <div class="handle" onclick="togglePanel()">—</div>
+  <button onclick="closePanel()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
+</div>
 
   <h3 id="title">📍 Новая точка</h3>
   <div id="coords"></div>
@@ -230,16 +233,21 @@ function togglePanel(){
 }
 
 /* OFFSET */
-function centerWithOffset(lat, lng, withPanel = false){
+function centerWithOffset(lat, lng, forcePanel = false){
 
-  const mapSize = map.getSize();
+  const size = map.getSize();
 
-  // базовое смещение вверх (в пикселях)
-  let offsetY = mapSize.y * 0.25;
+  // базовое смещение (всегда вверх)
+  let offsetY = size.y * 0.30;
 
-  // если открыта панель — увеличиваем смещение
-  if (withPanel || ui.open === "my" || ui.open === "create" || ui.open === "info") {
-    offsetY = mapSize.y * 0.40;
+  // если есть любая открытая панель — сильнее вверх
+  if (
+    forcePanel ||
+    ui.open === "my" ||
+    ui.open === "create" ||
+    ui.open === "info"
+  ) {
+    offsetY = size.y * 0.45;
   }
 
   const point = map.project([lat, lng], map.getZoom())
@@ -252,7 +260,6 @@ function centerWithOffset(lat, lng, withPanel = false){
     duration: 0.6
   });
 }
-
 /* ICONS */
 const icons = {
   "новая_точка":"📌",
@@ -313,7 +320,7 @@ map.on("locationfound", e => {
   // 🔥 1. первый запуск — мягкий центр
   if (!initialLocationSet) {
 
-    centerWithOffset(latlng.lat, latlng.lng, false);
+    centerWithOffset(latlng.lat, latlng.lng, ui.open !== null);
     initialLocationSet = true;
   }
 
@@ -377,6 +384,7 @@ function enableCreateMode(){
   tempMarker.on("dragend", (e) => {
     current = e.target.getLatLng();
     pointConfirmed = true; // 🔥 если двигал — значит выбрал
+    current = { lat: current.lat, lng: current.lng };
   });
 
   openPanel();
@@ -448,11 +456,10 @@ function renderPhotos(){
 /* SAVE */
 function saveDraft(){
 
-  if (!current) {
-    alert("Сначала укажи точку на карте");
-    return;
-  }
-
+  if (!current || !current.lat || !current.lng) {
+  alert("Сначала укажи точку на карте");
+  return;
+}
   let arr=JSON.parse(localStorage.getItem("points")||"[]");
 
   if(editMode){
