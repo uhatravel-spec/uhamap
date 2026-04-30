@@ -251,6 +251,9 @@ function centerWithTop(lat, lng) {
     const point = map.latLngToContainerPoint([lat, lng]);
 
     const offset = point.y - targetY;
+      console.log("pointY:", point.y);
+    console.log("targetY:", targetY);
+    console.log("offset:", offset);
 
     map.panBy([0, offset], {
       animate: true,
@@ -443,16 +446,25 @@ function requestCamera(){
   }, 100);
 }
 
-camera.onchange=e=>{
-  const file=e.target.files[0];
-  if(!file) return;
+camera.onchange = e => {
 
-  const r=new FileReader();
-  r.onload=ev=>{
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = ev => {
+
+    // ✅ добавляем фото в текущий массив
     photos.push(ev.target.result);
+
     renderPhotos();
+
+    // ✅ КРИТИЧНО: сброс input (иначе ломается повторное сохранение)
+    camera.value = "";
   };
-  r.readAsDataURL(file);
+
+  reader.readAsDataURL(file);
 };
 
 function renderPhotos(){
@@ -484,7 +496,7 @@ function saveDraft(){
       category:category.value,
       access:access.value,
       desc:desc.value,
-      photos,
+      photos: [...photos],
       status:"local"
     });
   }
@@ -765,3 +777,4 @@ init();
 </script>
 </body>
 </html>
+
