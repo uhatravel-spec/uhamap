@@ -195,7 +195,7 @@ function togglePanel(){
 /* OFFSET */
 function centerWithOffset(lat, lng){
 
-  const offsetY = window.innerHeight * 0.20;
+  const offsetY = window.innerHeight * 0.25;
   // ↑ точка будет выше центра экрана (чтобы панель не перекрывала)
 
   const point = map.project([lat, lng], map.getZoom())
@@ -268,14 +268,7 @@ map.on("dragstart", ()=> {
   // 🔥 1. первый запуск — мягкий центр
   if (!initialLocationSet) {
 
-  const offsetY = window.innerHeight * 0.35;
-
-  const point = map.project([latlng.lat, latlng.lng], 14)
-    .subtract([0, offsetY]);
-
-  const target = map.unproject(point, 14);
-
-  map.setView(target, 14); // без анимации, стабильный старт
+  centerWithOffset(latlng.lat, latlng.lng);
 
   initialLocationSet = true;
 }
