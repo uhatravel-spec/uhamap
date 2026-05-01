@@ -341,32 +341,37 @@ function togglePanel(){
 /* OFFSET */
 function centerWithTop(lat, lng) {
 
+  if (!map) return;
+
   const zoom = map.getZoom();
 
-  // 1. сначала ставим в центр
+  // ❗ останавливаем все анимации (это ключ к отсутствию "прыжков")
+  map.stop();
+
+  // 1. ставим центр БЕЗ анимации
   map.setView([lat, lng], zoom, { animate: false });
 
-  // ❗ ЖДЁМ ОДИН ТИК, чтобы карта реально обновилась
+  // 2. ждём рендер
   setTimeout(() => {
 
     const size = map.getSize();
 
-    // 🎯 хотим точку на 25% сверху
-    const targetY = size.y * 0.25;
+    // 🎯 смещение как в Google Maps (точка выше центра)
+    const targetY = size.y * 0.38;
 
     const point = map.latLngToContainerPoint([lat, lng]);
 
     const offset = point.y - targetY;
-      console.log("pointY:", point.y);
-    console.log("targetY:", targetY);
-    console.log("offset:", offset);
+
+    // 🔒 убираем микродёргание
+    if (Math.abs(offset) < 3) return;
 
     map.panBy([0, offset], {
       animate: true,
-      duration: 0.6
+      duration: 0.25
     });
 
-  }, 50);
+  }, 80);
 }
 
 /* ICONS */
@@ -595,27 +600,45 @@ camera.onchange = async (e) => {
 
   }
 };
-function renderPhotos(){
+async function renderPhotos(){
+
   photosEl.innerHTML = "";
 
-  photos.forEach(async (id, i) => {
+  for (let i = 0; i < photos.length; i++) {
 
+    const id = photos[i];
     const blob = await getPhotoBlob(id);
 
-    if (!blob) return;
+    if (!blob) continue;
 
     const url = URL.createObjectURL(blob);
 
-    let img = document.createElement("img");
+    const wrapper = document.createElement("div");
+    wrapper.style.display = "inline-block";
+    wrapper.style.position = "relative";
+
+    const img = document.createElement("img");
     img.src = url;
 
     img.onclick = () => {
+      openFullGallery(i); // 🔥 открываем галерею
+    };
+
+    const del = document.createElement("button");
+    del.innerText = "×";
+    del.style.position = "absolute";
+    del.style.top = "0";
+    del.style.right = "0";
+
+    del.onclick = () => {
       photos.splice(i, 1);
       renderPhotos();
     };
 
-    photosEl.appendChild(img);
-  });
+    wrapper.appendChild(img);
+    wrapper.appendChild(del);
+    photosEl.appendChild(wrapper);
+  }
 }
 function saveDraft(){
 
@@ -711,7 +734,9 @@ function openInfo(p){
     📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
     🚗 ${p.access}<br>
     📝 ${p.desc || ""}<br>
-    ${(p.photos||[]).map(ph=>`<img src="${ph}" width="60">`).join("")}
+    ${(p.photos||[]).map((ph, i)=>`
+  <img src="${ph}" width="60" onclick='openFullGallery(${JSON.stringify(p.photos)}, ${i})'>
+`).join("")}
     <button onclick="editPoint(${p.id})">✏️ Изменить</button>
     <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
   `;
@@ -731,9 +756,22 @@ function openPointInfo(p){
     </div>
 
     <div style="font-size:13px; color:#555;">
-      📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
-      🚗 ${p.access}<br>
-      📝 ${p.desc || ""}
+  📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
+  🚗 ${p.access}<br>
+  📝 ${p.desc || ""}<br>
+
+  ${(p.photos || []).map((ph, i) => `
+    <img src="${ph}" width="60"
+    onclick='openFullGallery(${JSON.stringify(p.photos)}, ${i})'>
+  `).join("")}
+  <br>
+</div>
+
+      <!-- 🔥 ВОТ СЮДА ФОТО -->
+      ${(p.photos || []).map((ph, i) => `
+        <img src="${ph}" width="60"
+        onclick='openFullGallery(${JSON.stringify(p.photos)}, ${i})'>
+      `).join("")}
     </div>
 
     <div class="point-card-actions">
@@ -741,7 +779,7 @@ function openPointInfo(p){
       <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
       <button onclick="publish()">📤 Опубликовать</button>
     </div>
-  `;
+`;
 
   card.classList.remove("hidden");
   
@@ -988,6 +1026,95 @@ function publish(){
 }
 init();
 
+let galleryIndex = 0;
+let galleryOverlay = null;
+let galleryImg = null;
+let galleryUrls = [];
+
+async function buildGalleryUrls(photoIds){
+
+  galleryUrls = [];
+
+  for (let id of photoIds) {
+    const blob = await getPhotoBlob(id);
+    if (blob) {
+      galleryUrls.push(URL.createObjectURL(blob));
+    }
+  }
+}
+
+async function openFullGallery(photoIds, index = 0){
+
+  galleryIndex = index;
+
+  if (galleryOverlay) {
+    galleryOverlay.remove();
+    galleryOverlay = null;
+  }
+
+  await buildGalleryUrls(photoIds);
+
+  if (galleryUrls.length === 0) return;
+
+  galleryOverlay = document.createElement("div");
+  galleryOverlay.style.position = "fixed";
+  galleryOverlay.style.top = "0";
+  galleryOverlay.style.left = "0";
+  galleryOverlay.style.width = "100%";
+  galleryOverlay.style.height = "100%";
+  galleryOverlay.style.background = "rgba(0,0,0,0.95)";
+  galleryOverlay.style.display = "flex";
+  galleryOverlay.style.alignItems = "center";
+  galleryOverlay.style.justifyContent = "center";
+  galleryOverlay.style.zIndex = "999999";
+
+  const img = document.createElement("img");
+  img.style.maxWidth = "92%";
+  img.style.maxHeight = "80%";
+
+  const render = () => {
+    img.src = galleryUrls[galleryIndex];
+  };
+
+  render();
+
+  galleryOverlay.onclick = closeGallery;
+
+  let startX = 0;
+
+  galleryOverlay.addEventListener("touchstart", e => {
+    startX = e.touches[0].clientX;
+  });
+
+  galleryOverlay.addEventListener("touchend", e => {
+
+    let endX = e.changedTouches[0].clientX;
+
+    if (endX < startX - 40 && galleryIndex < galleryUrls.length - 1) {
+      galleryIndex++;
+      render();
+    }
+
+    if (endX > startX + 40 && galleryIndex > 0) {
+      galleryIndex--;
+      render();
+    }
+  });
+
+  galleryOverlay.appendChild(img);
+  document.body.appendChild(galleryOverlay);
+}
+function closeGallery(){
+
+  if (galleryOverlay) {
+    galleryOverlay.remove();
+    galleryOverlay = null;
+  }
+
+  // чистим URL чтобы не текла память
+  galleryUrls.forEach(url => URL.revokeObjectURL(url));
+  galleryUrls = [];
+}
 </script>
 </body>
 </html>
