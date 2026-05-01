@@ -91,12 +91,56 @@ select, textarea, button {
   background:rgba(30,144,255,0.2);
   box-shadow:0 0 10px rgba(30,144,255,0.6);
 }
+
+.point-card {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  border-radius: 18px 18px 0 0;
+  padding: 12px;
+  z-index: 10000;
+  box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
+  max-height: 45vh;
+  overflow-y: auto;
+  transition: transform 0.2s ease;
+}
+
+.point-card.hidden {
+  transform: translateY(100%);
+}
+
+.point-card-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:8px;
+}
+
+.point-card-title {
+  font-size:16px;
+  font-weight:600;
+}
+
+.point-card-close {
+  background:none;
+  border:none;
+  font-size:18px;
+}
+
+.point-card-actions button {
+  width:100%;
+  margin-top:6px;
+}
 </style>
 </head>
 
 <body>
 
 <div id="map"></div>
+
+<div id="pointCard" class="point-card hidden"></div>
 
 <div class="menu">
   <button onclick="openMyPoints()">📂 Мои точки</button>
@@ -674,6 +718,34 @@ function openInfo(p){
 
   infoPanel.style.display="block";
 }
+function openPointInfo(p){
+
+  const card = document.getElementById("pointCard");
+
+  card.innerHTML = `
+    <div class="point-card-header">
+      <div class="point-card-title">
+        ${icons[p.category]} ${p.category}
+      </div>
+      <button class="point-card-close" onclick="closePointInfo()">✖</button>
+    </div>
+
+    <div style="font-size:13px; color:#555;">
+      📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
+      🚗 ${p.access}<br>
+      📝 ${p.desc || ""}
+    </div>
+
+    <div class="point-card-actions">
+      <button onclick="editPoint(${p.id})">✏️ Изменить</button>
+      <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
+      <button onclick="publish()">📤 Опубликовать</button>
+    </div>
+  `;
+
+  card.classList.remove("hidden");
+  
+}
 
 /* STORE */
 const PointStore = {
@@ -696,7 +768,6 @@ const PointStore = {
 
       m._data = p;
 
-      // 🔥 СИНХРОНИЗАЦИЯ ПОДСВЕТКИ ПРИ РЕНДЕРЕ
       if (p.id === activePointId) {
         setTimeout(() => {
           highlightMarker(m);
@@ -705,29 +776,26 @@ const PointStore = {
 
       m.on("click", () => {
 
-        // 1. активная точка
         activePointId = p.id;
-
-        // 2. подсветка
         highlightMarker(m);
 
-        // 3. текущая позиция
         current = { lat: p.lat, lng: p.lng };
 
-        // 4. центр карты
         centerWithTop(p.lat, p.lng);
 
-        // 5. инфо панель
-        openInfo(p);
-
-        // 6. 🔥 синхронизация списка
-        openMyPoints();
+        openPointInfo(p);
       });
 
       window.layer.addLayer(m);
+
     });
+
   }
+
 };
+function closePointInfo(){
+  document.getElementById("pointCard").classList.add("hidden");
+}
 
 /* HIGHLIGHT */
 function highlightMarker(marker){
