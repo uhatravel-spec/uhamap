@@ -493,99 +493,84 @@ function renderPhotos(){
 
 function saveDraft(){
 
-  try {
+  // 🔴 1. блокировка пока фото грузится
+  const status = document.getElementById("photoStatus");
 
-    // 🔴 фото грузится
-    const status = document.getElementById("photoStatus");
-    if (status && status.innerText === "📸 Загрузка фото...") {
-      alert("Подожди, фото ещё загружается");
-      return;
-    }
-
-    // 🔴 нет точки
-    if (!current || !current.lat || !current.lng) {
-      alert("Сначала укажи точку на карте");
-      return;
-    }
-
-    // 🔴 нет геолокации
-    if (!userMarker) {
-      alert("Геолокация не определена. Подожди пару секунд и попробуй снова.");
-      return;
-    }
-
-    const userLatLng = userMarker.getLatLng();
-
-    if (!userLatLng) {
-      alert("Ошибка геолокации. Попробуй ещё раз.");
-      return;
-    }
-
-    const distance = map.distance(userLatLng, current);
-
-    console.log("USER:", userLatLng);
-    console.log("POINT:", current);
-    console.log("DISTANCE:", distance);
-
-    // 🔴 радиус
-    if (distance > ALLOWED_RADIUS) {
-      alert("Ты слишком далеко. Сохранять можно только в радиусе 15 метров.");
-      return;
-    }
-
-    // 🔵 загрузка массива
-    let arr = JSON.parse(localStorage.getItem("points") || "[]");
-
-    if (editMode) {
-
-      arr = arr.map(p =>
-        p.id === editId
-          ? {
-              ...p,
-              category: category.value,
-              access: access.value,
-              desc: desc.value,
-              photos: [...photos]
-            }
-          : p
-      );
-
-    } else {
-
-      const newPoint = {
-        id: Date.now(),
-        lat: current.lat,
-        lng: current.lng,
-        category: category.value,
-        access: access.value,
-        desc: desc.value,
-        photos: [...photos],
-        status: "local"
-      };
-
-      arr.push(newPoint);
-
-      // 🔥 сразу добавляем на карту (без ожидания sync)
-      PointStore.sync();
-    }
-
-    localStorage.setItem("points", JSON.stringify(arr));
-
-    // 🔵 UI очистка
-    photos = [];
-    renderPhotos();
-
-    if (status) status.innerText = "";
-
-    closePanel();
-    createMode = false;
-    editMode = false;
-    editId = null;
-
-  } catch (err) {
-    console.error("SAVE ERROR:", err);
-    alert("Ошибка сохранения. Проверь консоль (F12)");
+  if (status && status.innerText === "📸 Загрузка фото...") {
+    alert("Подожди, фото ещё загружается");
+    return;
   }
+
+  // 🔴 2. проверка точки
+  if (!current || !current.lat || !current.lng) {
+    alert("Сначала укажи точку на карте");
+    return;
+  }
+
+  // 🔴 3. проверка геолокации
+  if (!userMarker) {
+    alert("Геолокация не определена. Подожди пару секунд.");
+    return;
+  }
+
+  // 🔴 4. проверка расстояния
+  const userLatLng = userMarker.getLatLng();
+  const distance = map.distance(userLatLng, current);
+
+  console.log("DISTANCE:", distance);
+
+  if (distance > ALLOWED_RADIUS) {
+    alert("Подойди ближе к точке (до 15 метров)");
+    return;
+  }
+
+  // 🔵 5. загрузка массива
+  let arr = JSON.parse(localStorage.getItem("points") || "[]");
+
+  if (editMode) {
+
+    arr = arr.map(p =>
+      p.id === editId
+        ? {
+            ...p,
+            category: category.value,
+            access: access.value,
+            desc: desc.value,
+            photos: [...photos]
+          }
+        : p
+    );
+
+  } else {
+
+    arr.push({
+      id: Date.now(),
+      lat: current.lat,
+      lng: current.lng,
+      category: category.value,
+      access: access.value,
+      desc: desc.value,
+      photos: [...photos],
+      status: "local"
+    });
+  }
+
+  localStorage.setItem("points", JSON.stringify(arr));
+
+  // 🔵 6. обновление карты
+  PointStore.sync();
+
+  // 🔵 7. очистка состояния фото
+  photos = [];
+  renderPhotos();
+
+  const statusEl = document.getElementById("photoStatus");
+  if (statusEl) statusEl.innerText = "";
+
+  // 🔵 8. закрываем панель (ВАЖНО: в конце!)
+  closePanel();
+
+  createMode = false;
 }
 /* INFO */
 function openInfo(p){
