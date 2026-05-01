@@ -161,6 +161,65 @@ let userMarker = null;
 let userCircle = null;
 const ALLOWED_RADIUS = 15; // радиус = 15м (диаметр 30м)
 let photos = [];
+const DB_NAME = "uhamap_db";
+const DB_VERSION = 1;
+const PHOTO_STORE = "photos";
+
+let db;
+
+function initDB() {
+  const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+  request.onupgradeneeded = function (e) {
+    const db = e.target.result;
+
+    if (!db.objectStoreNames.contains(PHOTO_STORE)) {
+      db.createObjectStore(PHOTO_STORE, { keyPath: "id" });
+    }
+  };
+
+  request.onsuccess = function (e) {
+    db = e.target.result;
+    console.log("IndexedDB ready");
+  };
+
+  request.onerror = function (e) {
+    console.error("IndexedDB error", e);
+  };
+}
+function savePhotoBlob(blob) {
+  return new Promise((resolve, reject) => {
+
+    if (!db) {
+      reject("DB not ready");
+      return;
+    }
+
+    const id = Date.now() + "_" + Math.random().toString(16).slice(2);
+
+    const tx = db.transaction([PHOTO_STORE], "readwrite");
+    const store = tx.objectStore(PHOTO_STORE);
+
+    const req = store.put({ id, blob });
+
+    req.onsuccess = () => resolve(id);
+    req.onerror = () => reject(req.error);
+
+  });
+}
+
+function getPhotoBlob(id) {
+  return new Promise((resolve) => {
+    const tx = db.transaction([PHOTO_STORE], "readonly");
+    const store = tx.objectStore(PHOTO_STORE);
+
+    const req = store.get(id);
+
+    req.onsuccess = () => {
+      resolve(req.result?.blob || null);
+    };
+  });
+}
 
 let editMode = false;
 let editId = null;
@@ -386,6 +445,7 @@ map.on("locationfound", e => {
 
   fillCategories();
   PointStore.sync();
+  initDB();
 }
 
 function enableCreateMode(){
@@ -458,39 +518,61 @@ function requestCamera(){
   }, 100);
 }
 
-camera.onchange = e => {
+camera.onchange = async (e) => {
 
   const file = e.target.files[0];
   if (!file) return;
 
   const status = document.getElementById("photoStatus");
+
+  if (!db) {
+    status.innerText = "⏳ Инициализация базы...";
+    return;
+  }
+
   status.innerText = "📸 Загрузка фото...";
 
-  const reader = new FileReader();
+  try {
 
-  reader.onload = ev => {
+    const id = await savePhotoBlob(file);
 
-    photos.push(ev.target.result);
+    photos.push(id);
 
     renderPhotos();
 
     status.innerText = "✅ Фото загружено";
 
     camera.value = "";
-  };
 
-  reader.readAsDataURL(file);
+  } catch (err) {
+
+    console.error(err);
+    status.innerText = "❌ Ошибка сохранения фото";
+
+  }
 };
 function renderPhotos(){
-  photosEl.innerHTML="";
-  photos.forEach((p,i)=>{
-    let img=document.createElement("img");
-    img.src=p;
-    img.onclick=()=>{ photos.splice(i,1); renderPhotos(); };
+  photosEl.innerHTML = "";
+
+  photos.forEach(async (id, i) => {
+
+    const blob = await getPhotoBlob(id);
+
+    if (!blob) return;
+
+    const url = URL.createObjectURL(blob);
+
+    let img = document.createElement("img");
+    img.src = url;
+
+    img.onclick = () => {
+      photos.splice(i, 1);
+      renderPhotos();
+    };
+
     photosEl.appendChild(img);
   });
 }
-
 function saveDraft(){
 
   // 🔴 1. блокировка пока фото грузится
