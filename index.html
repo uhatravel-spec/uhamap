@@ -158,6 +158,8 @@ let map;
 let current = null;
 let tempMarker = null;
 let userMarker = null;
+let userCircle = null;
+const ALLOWED_RADIUS = 15; // радиус = 15м (диаметр 30м)
 let photos = [];
 
 let editMode = false;
@@ -337,17 +339,29 @@ map.on("locationfound", e => {
     geoSet = true;
   }
 
-  // 🔵 маркер пользователя
-  if (!userMarker) {
-    userMarker = L.marker(latlng, {
-      icon: L.divIcon({
-        className: "",
-        html: `<div class="user-ring"></div>`
-      })
-    }).addTo(map);
-  } else {
-    userMarker.setLatLng(latlng);
-  }
+// 🔵 маркер пользователя
+if (!userMarker) {
+  userMarker = L.marker(latlng, {
+    icon: L.divIcon({
+      className: "",
+      html: `<div class="user-ring"></div>`
+    })
+  }).addTo(map);
+} else {
+  userMarker.setLatLng(latlng);
+}
+
+// 🔵 круг допустимой зоны (ВСЕГДА ОБНОВЛЯЕТСЯ)
+if (!userCircle) {
+  userCircle = L.circle(latlng, {
+    radius: ALLOWED_RADIUS,
+    color: "#2a9d8f",
+    weight: 1,
+    fillOpacity: 0.05
+  }).addTo(map);
+} else {
+  userCircle.setLatLng(latlng);
+}
 
 });
   map.on("click", e => {
@@ -483,13 +497,28 @@ function renderPhotos(){
 /* SAVE */
 function saveDraft(){
 
-  if (!current || !current.lat || !current.lng) {
-  if (document.getElementById("photoStatus").innerText === "📸 Загрузка фото...") {
-  alert("Фото ещё загружается, подожди");
+ // 🔴 блокировка пока грузится фото
+const status = document.getElementById("photoStatus");
+if (status && status.innerText === "📸 Загрузка фото...") {
+  alert("Подожди, фото ещё загружается");
   return;
 }
+
+// 🔴 проверка что точка выбрана
+if (!current || !current.lat || !current.lng) {
   alert("Сначала укажи точку на карте");
   return;
+}
+// 🔴 проверка расстояния до пользователя
+
+if (userMarker) {
+  const userLatLng = userMarker.getLatLng();
+  const distance = map.distance(userLatLng, current);
+
+  if (distance > ALLOWED_RADIUS) {
+    alert("Подойди к точке ближе. Максимальное расстояние — 15 метров.");
+  }
+
 }
   let arr=JSON.parse(localStorage.getItem("points")||"[]");
 
