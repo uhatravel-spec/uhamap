@@ -832,9 +832,7 @@ const PointStore = {
     const unique = new Map();
 
     [...server, ...local].forEach(p => {
-      if (p && p.id) {
-        unique.set(p.id, p);
-      }
+      if (p && p.id) unique.set(p.id, p);
     });
 
     const arr = Array.from(unique.values());
@@ -869,7 +867,6 @@ const PointStore = {
       });
 
       window.layer.addLayer(m);
-
     });
 
   }
