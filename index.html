@@ -350,7 +350,7 @@ function centerWithTop(lat, lng) {
   map.stop();
 
   // 1. ставим центр БЕЗ анимации
-  map.setView([lat, lng], zoom, { animate: false });
+  unique.setView([lat, lng], zoom, { animate: false });
 
   // 2. ждём рендер
   setTimeout(() => {
@@ -665,7 +665,6 @@ function saveDraft(){
     return;
   }
 
-  // 🔴 4. проверка расстояния
  // 🔵 4. проверка расстояния (создание + редактирование)
 const userLatLng = userMarker.getLatLng();
 
@@ -727,6 +726,7 @@ renderPhotos();
   if (statusEl) statusEl.innerText = "";
 
   publishId = null;
+  PointStore.sync();
 
   closePanel();
 
@@ -824,26 +824,30 @@ const PointStore = {
 
   sync(){
 
+    if (!map) return;
+
     const local = JSON.parse(localStorage.getItem("points") || "[]");
     const server = window.serverPoints || [];
-    const map = new Map();
+
+    const unique = new Map();
 
     [...server, ...local].forEach(p => {
-    map.set(p.id, p);
+      if (p && p.id) {
+        unique.set(p.id, p);
+      }
     });
 
-    const arr = Array.from(map.values());
+    const arr = Array.from(unique.values());
 
     if (!window.layer) {
       window.layer = L.layerGroup().addTo(map);
     } else {
-      if (!window.layer) {
-        window.layer = L.layerGroup().addTo(map);
-      }
       window.layer.clearLayers();
     }
 
     arr.forEach(p => {
+
+      if (!p.lat || !p.lng) return;
 
       const m = L.marker([p.lat, p.lng], {
         icon: icon(p.category)
@@ -851,15 +855,10 @@ const PointStore = {
 
       m._data = p;
 
-      if (p.id === activePointId) {
-        setTimeout(() => {
-          highlightMarker(m);
-        }, 0);
-      }
-
       m.on("click", () => {
 
         activePointId = p.id;
+
         highlightMarker(m);
 
         current = { lat: p.lat, lng: p.lng };
