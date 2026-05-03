@@ -621,9 +621,9 @@ async function renderPhotos(){
     const img = document.createElement("img");
     img.src = url;
 
-    img.onclick = () => {
-      openFullGallery(i); // 🔥 открываем галерею
-    };
+   img.onclick = () => {
+     openFullGallery(photos, i);
+   };
 
     const del = document.createElement("button");
     del.innerText = "×";
@@ -769,30 +769,51 @@ function openPointInfo(p){
     </div>
 
     <div style="font-size:13px; color:#555;">
-  📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
-  🚗 ${p.access}<br>
-  📝 ${p.desc || ""}<br>
-
-  ${(p.photos || []).map((ph, i) => `
-    <img src="${ph}" width="60"
-    onclick='openFullGallery(${JSON.stringify(p.photos)}, ${i})'>
-  `).join("")}
-  <br>
-</div>
-
+      📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
+      🚗 ${p.access}<br>
+      📝 ${p.desc || ""}<br>
     </div>
+
+    <div id="pointPhotos"></div>
 
     <div class="point-card-actions">
       <button onclick="editPoint(${p.id})">✏️ Изменить</button>
       <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
       <button onclick="publish()">📤 Опубликовать</button>
     </div>
-`;
+  `;
 
-  card.classList.remove("hidden");
-  
+card.classList.remove("hidden");
+
+setTimeout(() => {
+
+  const container = document.getElementById("pointPhotos");
+  if (!container) return;
+
+  (async () => {
+    for (let i = 0; i < (p.photos || []).length; i++) {
+
+      const id = p.photos[i];
+      const blob = await getPhotoBlob(id);
+      if (!blob) continue;
+
+      const url = URL.createObjectURL(blob);
+
+      const img = document.createElement("img");
+      img.src = url;
+      img.width = 60;
+      img.style.margin = "4px";
+      img.style.borderRadius = "6px";
+
+      img.onclick = () => openFullGallery(p.photos, i);
+
+      container.appendChild(img);
+    }
+  })();
+
+}, 0);
+
 }
-
 /* STORE */
 const PointStore = {
 
@@ -894,11 +915,11 @@ function openMyPoints(){
     d.style.marginBottom = "8px";
     d.style.cursor = "pointer";
 
-    d.innerHTML = `
+   d.innerHTML = `
   ${icons[p.category]} ${p.category}<br>
   <small>${p.desc || ""}</small><br>
 
-  <div class="preview" style="margin-top:5px;"></div>
+  <div class="preview"></div>
 
   <br>
 
@@ -922,6 +943,11 @@ const preview = d.querySelector(".preview");
     const img = document.createElement("img");
     img.src = url;
     img.width = 50;
+    img.style.marginRight = "5px";
+    img.style.borderRadius = "6px";
+
+    // ✅ ВАЖНО — открытие галереи
+    img.onclick = () => openFullGallery(p.photos, (p.photos || []).indexOf(ph));
     img.style.marginRight = "5px";
     img.style.borderRadius = "6px";
 
