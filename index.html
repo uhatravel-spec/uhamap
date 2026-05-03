@@ -267,6 +267,7 @@ function getPhotoBlob(id) {
 
 let editMode = false;
 let editId = null;
+let publishId = null;
 
 let activeMarker = null;
 let activePointId = null;
@@ -502,6 +503,7 @@ function enableCreateMode(){
 
   createMode = true;
   pointConfirmed = true;
+  publishId = null;
 
   const center = map.getCenter();
 
@@ -664,15 +666,22 @@ function saveDraft(){
   }
 
   // 🔴 4. проверка расстояния
-  const userLatLng = userMarker.getLatLng();
-  const distance = map.distance(userLatLng, current);
+ // 🔵 4. проверка расстояния (создание + редактирование)
+const userLatLng = userMarker.getLatLng();
 
-  console.log("DISTANCE:", distance);
+const distance = map.distance(userLatLng, current);
+
+console.log("DISTANCE:", distance);
+
+// 🚨 ограничение работает ТОЛЬКО при создании и редактировании
+if (createMode || editMode) {
 
   if (distance > ALLOWED_RADIUS) {
     alert("Подойди ближе к точке (до 15 метров)");
     return;
   }
+
+}
 
   // 🔵 5. загрузка массива
   let arr = JSON.parse(localStorage.getItem("points") || "[]");
@@ -701,35 +710,24 @@ function saveDraft(){
       access: access.value,
       desc: desc.value,
       photos: [...photos],
-      status: "local"
+      status: "local",
+      published: false   // 👈 добавили
     });
   }
 
-  if (data && data.length) {
-  localStorage.setItem("points", JSON.stringify(data));
-}
-  // 🔥 отправка последней точки на сервер
-const lastPoint = arr[arr.length - 1];
 
-fetch(API + "/points", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify(lastPoint)
-}).catch(err => console.error("POST error", err));
+// 🔵 6. обновление карты
+PointStore.sync();
 
-  // 🔵 6. обновление карты
-  PointStore.sync();
-
-  // 🔵 7. очистка состояния фото
-  photos = [];
-  renderPhotos();
+// 🔵 7. очистка состояния фото
+photos = [];
+renderPhotos();
 
   const statusEl = document.getElementById("photoStatus");
   if (statusEl) statusEl.innerText = "";
 
-  // 🔵 8. закрываем панель (ВАЖНО: в конце!)
+  publishId = null;
+
   closePanel();
 
   createMode = false;
@@ -758,6 +756,8 @@ function openInfo(p){
 }
 function openPointInfo(p){
 
+  publishId = p.id;
+
   const card = document.getElementById("pointCard");
 
   card.innerHTML = `
@@ -777,9 +777,14 @@ function openPointInfo(p){
     <div id="pointPhotos"></div>
 
     <div class="point-card-actions">
+
+      ${p.published ? '<div style="color:green">🟡 На модерации</div>' : ''}
+
+      ${!p.published ? `<button onclick="publish()">📤 Опубликовать</button>` : ''}
+
       <button onclick="editPoint(${p.id})">✏️ Изменить</button>
       <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
-      <button onclick="publish()">📤 Опубликовать</button>
+</div>
     </div>
   `;
 
@@ -819,11 +824,22 @@ const PointStore = {
 
   sync(){
 
-    const arr = JSON.parse(localStorage.getItem("points") || "[]");
+    const local = JSON.parse(localStorage.getItem("points") || "[]");
+    const server = window.serverPoints || [];
+    const map = new Map();
+
+    [...server, ...local].forEach(p => {
+    map.set(p.id, p);
+    });
+
+    const arr = Array.from(map.values());
 
     if (!window.layer) {
       window.layer = L.layerGroup().addTo(map);
     } else {
+      if (!window.layer) {
+        window.layer = L.layerGroup().addTo(map);
+      }
       window.layer.clearLayers();
     }
 
@@ -1000,6 +1016,7 @@ function editPoint(id){
 
   editMode=true;
   editId=id;
+  publishId = id;
 
   current={lat:p.lat,lng:p.lng};
 
@@ -1085,10 +1102,50 @@ desc.addEventListener("blur", () => {
 });
 
 function publish(){
-  saveDraft();
-  alert("✔ Точка сохранена");
+
+  let arr = JSON.parse(localStorage.getItem("points") || "[]");
+
+  const point = arr.find(p => p.id === publishId);
+
+  if (!point) {
+    alert("Точка не найдена");
+    return;
+  }
+
+  if (point.published) {
+    alert("Уже отправлено");
+    return;
+  }
+
+  fetch(API + "/points", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(point)
+  })
+  .then(() => {
+
+    point.published = true;
+
+    localStorage.setItem("points", JSON.stringify(arr));
+
+    alert("✅ Отправлено на модерацию");
+
+    PointStore.sync();
+
+  })
+  .catch(err => {
+    console.error("POST error", err);
+    alert("❌ Ошибка отправки");
+  });
+
 }
 init();
+// 🔁 автообновление точек каждые 10 секунд
+setInterval(() => {
+  loadPointsFromServer();
+}, 10000);
 
 let galleryIndex = 0;
 let galleryOverlay = null;
@@ -1183,13 +1240,10 @@ async function loadPointsFromServer(){
 
   try {
 
-    const res = await fetch(API + "/points");
+    const res = await fetch(API + "/points/public");
     const data = await res.json();
 
-    // 🔥 перезаписываем локальные точки
-    localStorage.setItem("points", JSON.stringify(data));
-
-    // 🔥 обновляем карту
+    window.serverPoints = data;
     PointStore.sync();
 
   } catch (err) {
