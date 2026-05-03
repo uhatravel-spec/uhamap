@@ -704,15 +704,10 @@ function saveDraft(){
       status: "local"
     });
   }
-  fetch(API + "/points", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify(arr[arr.length - 1])
-});
 
-  localStorage.setItem("points", JSON.stringify(arr));
+  if (data && data.length) {
+  localStorage.setItem("points", JSON.stringify(data));
+}
   // 🔥 отправка последней точки на сервер
 const lastPoint = arr[arr.length - 1];
 
@@ -785,11 +780,6 @@ function openPointInfo(p){
   <br>
 </div>
 
-      <!-- 🔥 ВОТ СЮДА ФОТО -->
-      ${(p.photos || []).map((ph, i) => `
-        <img src="${ph}" width="60"
-        onclick='openFullGallery(${JSON.stringify(p.photos)}, ${i})'>
-      `).join("")}
     </div>
 
     <div class="point-card-actions">
@@ -908,10 +898,9 @@ function openMyPoints(){
   ${icons[p.category]} ${p.category}<br>
   <small>${p.desc || ""}</small><br>
 
-  ${(p.photos || []).slice(0,3).map(ph => `
-    <img src="${ph}" width="50" style="margin-right:5px;border-radius:6px;">
-  `).join("")}
-  <br><br>
+  <div class="preview" style="margin-top:5px;"></div>
+
+  <br>
 
   <button onclick="focusPoint(${p.lat},${p.lng})">📍 Показать</button>
   <button onclick="editPoint(${p.id})">✏️ Изменить</button>
@@ -920,7 +909,11 @@ function openMyPoints(){
 const preview = d.querySelector(".preview");
 
 (async () => {
+
+  if (!preview) return;
+
   for (let ph of (p.photos || []).slice(0,3)) {
+
     const blob = await getPhotoBlob(ph);
     if (!blob) continue;
 
@@ -934,6 +927,7 @@ const preview = d.querySelector(".preview");
 
     preview.appendChild(img);
   }
+
 })();
 
     // 🔥 КЛИК ПО БЛОКУ = ВЫБОР ТОЧКИ
@@ -971,6 +965,9 @@ function focusPoint(lat,lng){
 
 /* EDIT */
 function editPoint(id){
+
+  closePointInfo();
+  closeMyPanel();
   const arr=JSON.parse(localStorage.getItem("points")||"[]");
   const p=arr.find(x=>x.id===id);
   if(!p) return;
