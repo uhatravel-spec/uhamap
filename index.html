@@ -196,7 +196,7 @@ select, textarea, button {
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-const API = "YOUR_API_URL";
+const API = "https://uhamap.com/api";
 
 let map;
 let current = null;
@@ -495,6 +495,7 @@ map.on("locationfound", e => {
   fillCategories();
   PointStore.sync();
   initDB();
+  loadPointsFromServer();
 }
 
 function enableCreateMode(){
@@ -703,8 +704,25 @@ function saveDraft(){
       status: "local"
     });
   }
+  fetch(API + "/points", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify(arr[arr.length - 1])
+});
 
   localStorage.setItem("points", JSON.stringify(arr));
+  // 🔥 отправка последней точки на сервер
+const lastPoint = arr[arr.length - 1];
+
+fetch(API + "/points", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify(lastPoint)
+}).catch(err => console.error("POST error", err));
 
   // 🔵 6. обновление карты
   PointStore.sync();
@@ -748,11 +766,11 @@ function openPointInfo(p){
   const card = document.getElementById("pointCard");
 
   card.innerHTML = `
-    <div class="point-card-header">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
       <div class="point-card-title">
         ${icons[p.category]} ${p.category}
       </div>
-      <button class="point-card-close" onclick="closePointInfo()">✖</button>
+      <button onclick="closePointInfo()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
     </div>
 
     <div style="font-size:13px; color:#555;">
@@ -887,13 +905,36 @@ function openMyPoints(){
     d.style.cursor = "pointer";
 
     d.innerHTML = `
-      ${icons[p.category]} ${p.category}<br>
-      <small>${p.desc || ""}</small><br><br>
+  ${icons[p.category]} ${p.category}<br>
+  <small>${p.desc || ""}</small><br>
 
-      <button onclick="focusPoint(${p.lat},${p.lng})">📍 Показать</button>
-      <button onclick="editPoint(${p.id})">✏️ Изменить</button>
-      <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
-    `;
+  ${(p.photos || []).slice(0,3).map(ph => `
+    <img src="${ph}" width="50" style="margin-right:5px;border-radius:6px;">
+  `).join("")}
+  <br><br>
+
+  <button onclick="focusPoint(${p.lat},${p.lng})">📍 Показать</button>
+  <button onclick="editPoint(${p.id})">✏️ Изменить</button>
+  <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
+`;
+const preview = d.querySelector(".preview");
+
+(async () => {
+  for (let ph of (p.photos || []).slice(0,3)) {
+    const blob = await getPhotoBlob(ph);
+    if (!blob) continue;
+
+    const url = URL.createObjectURL(blob);
+
+    const img = document.createElement("img");
+    img.src = url;
+    img.width = 50;
+    img.style.marginRight = "5px";
+    img.style.borderRadius = "6px";
+
+    preview.appendChild(img);
+  }
+})();
 
     // 🔥 КЛИК ПО БЛОКУ = ВЫБОР ТОЧКИ
     d.onclick = (e) => {
@@ -1114,6 +1155,23 @@ function closeGallery(){
   // чистим URL чтобы не текла память
   galleryUrls.forEach(url => URL.revokeObjectURL(url));
   galleryUrls = [];
+}
+async function loadPointsFromServer(){
+
+  try {
+
+    const res = await fetch(API + "/points");
+    const data = await res.json();
+
+    // 🔥 перезаписываем локальные точки
+    localStorage.setItem("points", JSON.stringify(data));
+
+    // 🔥 обновляем карту
+    PointStore.sync();
+
+  } catch (err) {
+    console.error("LOAD error", err);
+  }
 }
 </script>
 </body>
