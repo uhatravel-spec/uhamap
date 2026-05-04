@@ -820,55 +820,57 @@ setTimeout(() => {
 /* STORE */
 const PointStore = {
 
-  sync(){
+sync(){
 
-    if (!map) return;
+  if (!map) return;
 
-    const local = JSON.parse(localStorage.getItem("points") || "[]");
-    const server = window.serverPoints || [];
+  const local = JSON.parse(localStorage.getItem("points") || "[]");
+  const server = window.serverPoints || [];
 
-    const unique = new Map();
+  const unique = new Map();
 
-    [...server, ...local].forEach(p => {
-      if (p && p.id) unique.set(p.id, p);
-    });
+  [...server, ...local].forEach(p => {
+    if (p && p.id) unique.set(p.id, p);
+  });
 
-    const arr = Array.from(unique.values());
+  const arr = Array.from(unique.values())
 
-    if (!window.layer) {
-      window.layer = L.layerGroup().addTo(map);
-    } else {
-      window.layer.clearLayers();
-    }
+    // 🔥 ВАЖНО: показываем только approved
+    .filter(p => p.status === "approved");
 
-    arr.forEach(p => {
-
-      if (!p.lat || !p.lng) return;
-
-      const m = L.marker([p.lat, p.lng], {
-        icon: icon(p.category)
-      });
-      p._marker = m;
-
-      m._data = p;
-
-      m.on("click", () => {
-
-        activePointId = p.id;
-
-        highlightMarker(m);
-
-        current = { lat: p.lat, lng: p.lng };
-
-        centerWithTop(p.lat, p.lng);
-
-        openPointInfo(p);
-      });
-
-      window.layer.addLayer(m);
-    });
-
+  if (!window.layer) {
+    window.layer = L.layerGroup().addTo(map);
+  } else {
+    window.layer.clearLayers();
   }
+
+  arr.forEach(p => {
+
+    if (!p.lat || !p.lng) return;
+
+    const m = L.marker([p.lat, p.lng], {
+      icon: icon(p.category)
+    });
+
+    p._marker = m;
+    m._data = p;
+
+    m.on("click", () => {
+
+      activePointId = p.id;
+
+      highlightMarker(m);
+
+      current = { lat: p.lat, lng: p.lng };
+
+      centerWithTop(p.lat, p.lng);
+
+      openPointInfo(p);
+    });
+
+    window.layer.addLayer(m);
+  });
+}
 
 };
 function closePointInfo(){
@@ -1136,7 +1138,7 @@ async function publish(){
 
   const formData = new FormData();
 
-  // 📦 1. данные точки
+  // данные точки
   formData.append("data", JSON.stringify({
     id: point.id,
     lat: point.lat,
@@ -1144,55 +1146,45 @@ async function publish(){
     category: point.category,
     access: point.access,
     desc: point.desc,
+    status: "pending",
     user_id: tg.initDataUnsafe?.user?.id || null,
     user_name: tg.initDataUnsafe?.user?.first_name || "user"
   }));
 
-  // 📸 2. фото (IndexedDB → File)
+  // ФОТО В ОДИН РАЗ
   const photosArr = point.photos || [];
 
   for (let i = 0; i < photosArr.length; i++) {
 
-    const id = photosArr[i];
-    const blob = await getPhotoBlob(id);
-
+    const blob = await getPhotoBlob(photosArr[i]);
     if (!blob) continue;
 
-    const fileName = `photo_${point.id}_${i}.jpg`;
-
-    const file = new File([blob], fileName, {
-      type: blob.type || "image/jpeg"
-    });
-
-    formData.append("photos", file);
+    formData.append(
+      "photos",
+      new File([blob], `photo_${i}.jpg`, {
+        type: blob.type || "image/jpeg"
+      })
+    );
   }
 
-  // 🚀 отправка на backend
-  const res = await fetch(API + "/points/pending", {
-    method: "POST",
-    body: formData
-  });
-
-  if (!res.ok) return alert("Ошибка публикации");
-
-  point.published = true;
-  localStorage.setItem("points", JSON.stringify(arr));
-
-  alert("Отправлено на модерацию");
-  PointStore.sync();
-}
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onloadend = () => {
-      resolve(reader.result); // data:image/jpeg;base64,...
-    };
-
-    reader.onerror = reject;
-
-    reader.readAsDataURL(blob);
-  });
+  const res = await fetch(API + "/points", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    data: {
+      id: point.id,
+      lat: point.lat,
+      lng: point.lng,
+      category: point.category,
+      access: point.access,
+      desc: point.desc,
+      status: "pending",
+      user_id: tg.initDataUnsafe?.user?.id || null,
+      user_name: tg.initDataUnsafe?.user?.first_name || "user",
+      photos: point.photos || []
+    }
+  })
+});
 }
 init();
 // 🔁 автообновление точек каждые 10 секунд
