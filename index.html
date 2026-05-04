@@ -193,8 +193,11 @@ select, textarea, button {
 
 <script>
 
-const tg = window.Telegram.WebApp;
-tg.expand();
+const tg = window.Telegram?.WebApp || null;
+
+if (tg && tg.expand) {
+  tg.expand();
+}
 
 const API = "https://uhamap.com/api";
 
@@ -1316,6 +1319,9 @@ function publishFromList(id){
   publishId = id;
   publish();
 }
+window.onload = () => {
+  init();
+};
 </script>
 </body>
 </html>
