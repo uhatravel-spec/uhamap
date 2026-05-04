@@ -350,8 +350,7 @@ function centerWithTop(lat, lng) {
   map.stop();
 
   // 1. ставим центр БЕЗ анимации
-  unique.setView([lat, lng], zoom, { animate: false });
-
+  map.setView([lat, lng], zoom, { animate: false });
   // 2. ждём рендер
   setTimeout(() => {
 
@@ -666,14 +665,14 @@ function saveDraft(){
   }
 
  // 🔵 4. проверка расстояния (создание + редактирование)
-const userLatLng = userMarker.getLatLng();
+  const userLatLng = userMarker.getLatLng();
 
-const distance = map.distance(userLatLng, current);
+  const distance = map.distance(userLatLng, current);
 
-console.log("DISTANCE:", distance);
+  console.log("DISTANCE:", distance);
 
 // 🚨 ограничение работает ТОЛЬКО при создании и редактировании
-if (createMode || editMode) {
+  if (createMode || editMode) {
 
   if (distance > ALLOWED_RADIUS) {
     alert("Подойди ближе к точке (до 15 метров)");
@@ -682,55 +681,54 @@ if (createMode || editMode) {
 
 }
 
-  // 🔵 5. загрузка массива
-  let arr = JSON.parse(localStorage.getItem("points") || "[]");
+let arr = JSON.parse(localStorage.getItem("points") || "[]");
 
-  if (editMode) {
+if (editMode) {
 
-    arr = arr.map(p =>
-      p.id === editId
-        ? {
-            ...p,
-            category: category.value,
-            access: access.value,
-            desc: desc.value,
-            photos: [...photos]
-          }
-        : p
-    );
+  arr = arr.map(p =>
+    p.id === editId
+      ? {
+          ...p,
+          category: category.value,
+          access: access.value,
+          desc: desc.value,
+          photos: [...photos]
+        }
+      : p
+  );
 
-  } else {
+} else {
 
-    arr.push({
-      id: Date.now(),
-      lat: current.lat,
-      lng: current.lng,
-      category: category.value,
-      access: access.value,
-      desc: desc.value,
-      photos: [...photos],
-      status: "local",
-      published: false   // 👈 добавили
-    });
-  }
+  arr.push({
+    id: Date.now(),
+    lat: current.lat,
+    lng: current.lng,
+    category: category.value,
+    access: access.value,
+    desc: desc.value,
+    photos: [...photos],
+    status: "local",
+    published: false
+  });
+}
 
+// ✅ ВОТ ЭТО ОБЯЗАТЕЛЬНО
+localStorage.setItem("points", JSON.stringify(arr));
 
-// 🔵 6. обновление карты
+// ✅ потом обновление карты
 PointStore.sync();
 
-// 🔵 7. очистка состояния фото
+// очистка
 photos = [];
 renderPhotos();
 
-  const statusEl = document.getElementById("photoStatus");
-  if (statusEl) statusEl.innerText = "";
+const statusEl = document.getElementById("photoStatus");
+if (statusEl) statusEl.innerText = "";
 
-  publishId = null;
-  PointStore.sync();
+publishId = null;
 
-  closePanel();
-
-  createMode = false;
+closePanel();
+createMode = false;
 }
 /* INFO */
 function openInfo(p){
