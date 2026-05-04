@@ -848,6 +848,7 @@ const PointStore = {
       const m = L.marker([p.lat, p.lng], {
         icon: icon(p.category)
       });
+      p._marker = m;
 
       m._data = p;
 
@@ -934,6 +935,9 @@ function openMyPoints(){
   <br>
 
   <button onclick="focusPoint(${p.lat},${p.lng})">📍 Показать</button>
+
+  ${!p.published ? `<button onclick="publishFromList(${p.id})">📤 Опубликовать</button>` : '<div style="color:green">🟡 На модерации</div>'}
+
   <button onclick="editPoint(${p.id})">✏️ Изменить</button>
   <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
 `;
@@ -1004,27 +1008,55 @@ function editPoint(id){
 
   closePointInfo();
   closeMyPanel();
-  const arr=JSON.parse(localStorage.getItem("points")||"[]");
-  const p=arr.find(x=>x.id===id);
-  if(!p) return;
 
-  editMode=true;
-  editId=id;
+  const arr = JSON.parse(localStorage.getItem("points") || "[]");
+  const p = arr.find(x => x.id === id);
+  if (!p) return;
+
+  const layer = window.layer;
+  let marker = null;
+
+  layer.eachLayer(l => {
+    if (l._data && l._data.id === id) {
+      marker = l;
+    }
+  });
+
+  if (marker) {
+
+    marker.dragging.enable();
+    marker.setZIndexOffset(1000);
+
+    marker.on("dragend", (e) => {
+      const pos = e.target.getLatLng();
+
+      current = {
+        lat: pos.lat,
+        lng: pos.lng
+      };
+
+      coords.innerText =
+        current.lat.toFixed(5) + ", " + current.lng.toFixed(5);
+    });
+  }
+
+  editMode = true;
+  editId = id;
   publishId = id;
 
-  current={lat:p.lat,lng:p.lng};
+  current = { lat: p.lat, lng: p.lng };
 
-  category.value=p.category;
-  access.value=p.access;
-  desc.value=p.desc;
+  category.value = p.category;
+  access.value = p.access;
+  desc.value = p.desc;
 
-  photos=[...(p.photos||[])];
+  photos = [...(p.photos || [])];
   renderPhotos();
 
-  title.innerText="✏️ Редактирование";
+  title.innerText = "✏️ Редактирование";
 
   closeInfo();
-  centerWithTop(p.lat,p.lng);
+  centerWithTop(p.lat, p.lng);
   openPanel();
 }
 
@@ -1095,45 +1127,72 @@ desc.addEventListener("blur", () => {
   setTimeout(() => setPanel(0.33), 150);
 });
 
-function publish(){
+async function publish(){
 
   let arr = JSON.parse(localStorage.getItem("points") || "[]");
-
   const point = arr.find(p => p.id === publishId);
 
-  if (!point) {
-    alert("Точка не найдена");
-    return;
+  if (!point) return alert("Точка не найдена");
+
+  const formData = new FormData();
+
+  // 📦 1. данные точки
+  formData.append("data", JSON.stringify({
+    id: point.id,
+    lat: point.lat,
+    lng: point.lng,
+    category: point.category,
+    access: point.access,
+    desc: point.desc,
+    user_id: tg.initDataUnsafe?.user?.id || null,
+    user_name: tg.initDataUnsafe?.user?.first_name || "user"
+  }));
+
+  // 📸 2. фото (IndexedDB → File)
+  const photosArr = point.photos || [];
+
+  for (let i = 0; i < photosArr.length; i++) {
+
+    const id = photosArr[i];
+    const blob = await getPhotoBlob(id);
+
+    if (!blob) continue;
+
+    const fileName = `photo_${point.id}_${i}.jpg`;
+
+    const file = new File([blob], fileName, {
+      type: blob.type || "image/jpeg"
+    });
+
+    formData.append("photos", file);
   }
 
-  if (point.published) {
-    alert("Уже отправлено");
-    return;
-  }
-
-  fetch(API + "/points", {
+  // 🚀 отправка на backend
+  const res = await fetch(API + "/points/pending", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(point)
-  })
-  .then(() => {
-
-    point.published = true;
-
-    localStorage.setItem("points", JSON.stringify(arr));
-
-    alert("✅ Отправлено на модерацию");
-
-    PointStore.sync();
-
-  })
-  .catch(err => {
-    console.error("POST error", err);
-    alert("❌ Ошибка отправки");
+    body: formData
   });
 
+  if (!res.ok) return alert("Ошибка публикации");
+
+  point.published = true;
+  localStorage.setItem("points", JSON.stringify(arr));
+
+  alert("Отправлено на модерацию");
+  PointStore.sync();
+}
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      resolve(reader.result); // data:image/jpeg;base64,...
+    };
+
+    reader.onerror = reject;
+
+    reader.readAsDataURL(blob);
+  });
 }
 init();
 // 🔁 автообновление точек каждые 10 секунд
@@ -1243,6 +1302,25 @@ async function loadPointsFromServer(){
   } catch (err) {
     console.error("LOAD error", err);
   }
+}
+
+function publishFromList(id){
+
+  let arr = JSON.parse(localStorage.getItem("points") || "[]");
+  const point = arr.find(p => p.id === id);
+
+  if (!point) {
+    alert("Точка не найдена");
+    return;
+  }
+
+  if (point.published) {
+    alert("Уже отправлено");
+    return;
+  }
+
+  publishId = id;
+  publish();
 }
 </script>
 </body>
