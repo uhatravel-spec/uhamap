@@ -39,7 +39,7 @@ body { margin:0; font-family:Arial; }
   border-radius:20px 20px 0 0;
   display:none;
   z-index:9999;
- 
+
   height:33vh;
   max-height:90vh;
 
@@ -897,7 +897,15 @@ function highlightMarker(marker){
   }, 0);
 }
 
-/* MY POINTS */
+function getStatusText(p){
+
+  if (p.status === "pending") return "🟡 На модерации";
+  if (p.status === "approved") return "🟢 Опубликована";
+  if (p.status === "local") return "⚪ Локально сохранена";
+
+  return "⚪ Неизвестно";
+}
+
 function openMyPoints(){
   ui.open = "my";
   renderUI();
@@ -931,6 +939,7 @@ function openMyPoints(){
    d.innerHTML = `
   ${icons[p.category]} ${p.category}<br>
   <small>${p.desc || ""}</small><br>
+  <div>${getStatusText(p)}</div>
 
   <div class="preview"></div>
 
@@ -1129,45 +1138,25 @@ desc.addEventListener("blur", () => {
   setTimeout(() => setPanel(0.33), 150);
 });
 
-async function publish(){
+async function publish() {
 
   let arr = JSON.parse(localStorage.getItem("points") || "[]");
   const point = arr.find(p => p.id === publishId);
 
-  if (!point) return alert("Точка не найдена");
-
-  const formData = new FormData();
-
-  // данные точки
-  formData.append("data", JSON.stringify({
-    id: point.id,
-    lat: point.lat,
-    lng: point.lng,
-    category: point.category,
-    access: point.access,
-    desc: point.desc,
-    status: "pending",
-    user_id: tg.initDataUnsafe?.user?.id || null,
-    user_name: tg.initDataUnsafe?.user?.first_name || "user"
-  }));
-
-  // ФОТО В ОДИН РАЗ
-  const photosArr = point.photos || [];
-
-  for (let i = 0; i < photosArr.length; i++) {
-
-    const blob = await getPhotoBlob(photosArr[i]);
-    if (!blob) continue;
-
-    formData.append(
-      "photos",
-      new File([blob], `photo_${i}.jpg`, {
-        type: blob.type || "image/jpeg"
-      })
-    );
+  if (!point) {
+    alert("Точка не найдена");
+    return;
   }
 
-  const res = await fetch(API + "/points", {
+  // 🚨 защита от повторной отправки
+  if (point.status === "pending") {
+    alert("Точка уже отправлена на модерацию");
+    return;
+  }
+
+  try {
+
+const res = await fetch(API + "/points", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
@@ -1185,18 +1174,31 @@ async function publish(){
     }
   })
 });
+
+console.log("SEND RESPONSE:", res);
+
+if (!res.ok) {
+  const errText = await res.text();
+  console.error("PUBLISH ERROR RESPONSE:", errText);
+  alert("Ошибка публикации: " + errText);
+  return;
 }
-init();
-// 🔁 автообновление точек каждые 10 секунд
-setInterval(() => {
-  loadPointsFromServer();
-}, 10000);
 
-let galleryIndex = 0;
-let galleryOverlay = null;
-let galleryImg = null;
-let galleryUrls = [];
+    // ✅ обновляем локальный статус
+    point.status = "pending";
+    localStorage.setItem("points", JSON.stringify(arr));
 
+    // 🔄 обновляем карту/маркеры
+    PointStore.sync();
+
+    alert("Отправлено на модерацию");
+
+  } catch (err) {
+
+    console.error("Network error:", err);
+    alert("Ошибка сети при публикации");
+  }
+}
 async function buildGalleryUrls(photoIds){
 
   galleryUrls = [];
