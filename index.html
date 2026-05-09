@@ -199,7 +199,7 @@ if (tg && tg.expand) {
   tg.expand();
 }
 
-const API = "https://uhamap.com/api";
+const API = "https://script.google.com/macros/s/AKfycbydMASv9NZPeLOqZ3vf466umc0zE5xkZ8GA0lYLyFLTUNOiYNmDyOF_7DdBBWKS9QYf/exec";
 
 let map;
 let current = null;
@@ -839,7 +839,7 @@ sync(){
   const arr = Array.from(unique.values())
 
     // 🔥 ВАЖНО: показываем только approved
-    .filter(p => p.status === "approved");
+    .filter(p => p.status === "approved" || p.status === "pending" || p.status === "local");
 
   if (!window.layer) {
     window.layer = L.layerGroup().addTo(map);
