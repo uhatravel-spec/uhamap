@@ -1160,7 +1160,9 @@ async function publish() {
 
     const res = await fetch(API, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
       body: JSON.stringify({
         action: "savePoint",
         data: {
@@ -1178,7 +1180,7 @@ async function publish() {
     });
 
     const text = await res.text();
-    console.log("RESP:", text);
+    console.log("SERVER RESPONSE:", text);
 
     point.status = "pending";
     localStorage.setItem("points", JSON.stringify(arr));
