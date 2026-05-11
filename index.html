@@ -1151,55 +1151,45 @@ async function publish() {
     return;
   }
 
-  // 🚨 защита от повторной отправки
   if (point.status === "pending") {
-    alert("Точка уже отправлена на модерацию");
+    alert("Уже отправлено");
     return;
   }
 
   try {
 
-const res = await fetch(API + "/points", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    data: {
-      id: point.id,
-      lat: point.lat,
-      lng: point.lng,
-      category: point.category,
-      access: point.access,
-      desc: point.desc,
-      status: "pending",
-      user_id: tg.initDataUnsafe?.user?.id || null,
-      user_name: tg.initDataUnsafe?.user?.first_name || "user",
-      photos: point.photos || []
-    }
-  })
-});
+    const res = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "savePoint",
+        data: {
+          id: point.id,
+          lat: point.lat,
+          lng: point.lng,
+          category: point.category,
+          access: point.access,
+          description: point.desc,
+          user_id: tg?.initDataUnsafe?.user?.id || 0,
+          user_name: tg?.initDataUnsafe?.user?.first_name || "user",
+          photo_url: (point.photos || []).join(",")
+        }
+      })
+    });
 
-console.log("SEND RESPONSE:", res);
+    const text = await res.text();
+    console.log("RESP:", text);
 
-if (!res.ok) {
-  const errText = await res.text();
-  console.error("PUBLISH ERROR RESPONSE:", errText);
-  alert("Ошибка публикации: " + errText);
-  return;
-}
-
-    // ✅ обновляем локальный статус
     point.status = "pending";
     localStorage.setItem("points", JSON.stringify(arr));
 
-    // 🔄 обновляем карту/маркеры
     PointStore.sync();
 
     alert("Отправлено на модерацию");
 
   } catch (err) {
-
-    console.error("Network error:", err);
-    alert("Ошибка сети при публикации");
+    console.error(err);
+    alert("Ошибка сети");
   }
 }
 async function buildGalleryUrls(photoIds){
@@ -1290,7 +1280,7 @@ async function loadPointsFromServer(){
 
   try {
 
-    const res = await fetch(API + "/points/public");
+    const res = await fetch(API + "?action=getPoints");
     const data = await res.json();
 
     window.serverPoints = data;
