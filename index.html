@@ -195,6 +195,13 @@ select, textarea, button {
 
 const tg = window.Telegram?.WebApp || null;
 
+const CURRENT_USER_ID = tg?.initDataUnsafe?.user?.id || 0;
+
+// временно список админов (позже перенесём в backend)
+const ADMIN_IDS = [8614991755];
+
+const IS_ADMIN = ADMIN_IDS.includes(CURRENT_USER_ID);
+
 if (tg && tg.expand) {
   tg.expand();
 }
@@ -779,12 +786,34 @@ function openPointInfo(p){
 
     <div class="point-card-actions">
 
-      ${p.published ? '<div style="color:green">🟡 На модерации</div>' : ''}
+  <!-- 🔒 ВСЕГДА показываем статус -->
+  <div style="margin-bottom:8px;">
+    ${p.status === "approved"
+      ? "🟢 Опубликовано"
+      : p.status === "pending"
+        ? "🟡 На модерации"
+        : "⚪ Локально"}
+  </div>
 
-      ${!p.published ? `<button onclick="publish()">📤 Опубликовать</button>` : ''}
+  <!-- 👤 ТОЛЬКО СВОИ ТОЧКИ -->
+${
+  IS_ADMIN ? `
+    <button onclick="editPoint(${p.id})">✏️ Редактировать</button>
+    <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
+    <button onclick="updateStatusAdmin(${p.id}, 'approved')">✅ Одобрить</button>
+    <button onclick="updateStatusAdmin(${p.id}, 'rejected')">❌ Отклонить</button>
+  `
+  :
+  (p.user_id == CURRENT_USER_ID && p.status !== "approved") ? `
+    <button onclick="editPoint(${p.id})">✏️ Изменить</button>
+    <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
 
-      <button onclick="editPoint(${p.id})">✏️ Изменить</button>
-      <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
+    ${p.status !== "pending" ? `
+      <button onclick="publish()">📤 Отправить на модерацию</button>
+    ` : ""}
+  ` : ""
+}
+
 </div>
     </div>
   `;
@@ -836,10 +865,12 @@ sync(){
     if (p && p.id) unique.set(p.id, p);
   });
 
-  const arr = Array.from(unique.values())
+const arr = Array.from(unique.values())
 
-    // 🔥 ВАЖНО: показываем только approved
-    .filter(p => p.status === "approved" || p.status === "pending" || p.status === "local");
+.filter(p => {
+  if (IS_ADMIN) return true; 
+  return p.status === "approved" || p.user_id == CURRENT_USER_ID;
+});
 
   if (!window.layer) {
     window.layer = L.layerGroup().addTo(map);
@@ -912,17 +943,18 @@ function getStatusText(p){
 function openMyPoints(){
   ui.open = "my";
   renderUI();
+
   const box = myPanel;
   panelEl.style.display = "none";
   infoPanel.style.display = "none";
 
   box.innerHTML = `
-  <div style="display:flex; justify-content:space-between; align-items:center;">
-    <div class='handle' onclick='toggleMyPanel()'>—</div>
-    <button onclick="closeMyPanel()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
-  </div>
-  <h3>Мои точки</h3>
-`;
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div class='handle' onclick='toggleMyPanel()'>—</div>
+      <button onclick="closeMyPanel()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
+    </div>
+    <h3>Мои точки</h3>
+  `;
 
   const arr = JSON.parse(localStorage.getItem("points") || "[]");
 
@@ -930,7 +962,6 @@ function openMyPoints(){
 
     const d = document.createElement("div");
 
-    // 🔥 подсветка выбранной точки
     if (p.id === activePointId) {
       d.classList.add("active-point");
     }
@@ -939,61 +970,64 @@ function openMyPoints(){
     d.style.marginBottom = "8px";
     d.style.cursor = "pointer";
 
-   d.innerHTML = `
-  ${icons[p.category]} ${p.category}<br>
-  <small>${p.desc || ""}</small><br>
-  <div>${getStatusText(p)}</div>
+    d.innerHTML = `
+      ${icons[p.category]} ${p.category}<br>
+      <small>${p.desc || ""}</small><br>
 
-  <div class="preview"></div>
+      <div>${getStatusText(p)}</div>
 
-  <br>
+      <div class="preview"></div>
 
-  <button onclick="focusPoint(${p.lat},${p.lng})">📍 Показать</button>
+      <br>
 
-  ${!p.published ? `<button onclick="publishFromList(${p.id})">📤 Опубликовать</button>` : '<div style="color:green">🟡 На модерации</div>'}
+      <button onclick="focusPoint(${p.lat},${p.lng})">📍 Показать</button>
 
-  <button onclick="editPoint(${p.id})">✏️ Изменить</button>
-  <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
-`;
-const preview = d.querySelector(".preview");
+      ${p.status === "draft" ? `
+        <button onclick="editPoint(${p.id})">✏️ Изменить</button>
+        <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
+        <button onclick="publishFromList(${p.id})">📤 Отправить на модерацию</button>
+      ` : ""}
 
-(async () => {
+      ${p.status === "pending" ? `
+        <div style="color:orange">⏳ На модерации</div>
+      ` : ""}
 
-  if (!preview) return;
+      ${p.status === "approved" ? `
+        <div style="color:green">🟢 Опубликовано</div>
+      ` : ""}
+    `;
 
-  for (let ph of (p.photos || []).slice(0,3)) {
+    const preview = d.querySelector(".preview");
 
-    const blob = await getPhotoBlob(ph);
-    if (!blob) continue;
+    (async () => {
+      if (!preview) return;
 
-    const url = URL.createObjectURL(blob);
+      for (let ph of (p.photos || []).slice(0,3)) {
 
-    const img = document.createElement("img");
-    img.src = url;
-    img.width = 50;
-    img.style.marginRight = "5px";
-    img.style.borderRadius = "6px";
+        const blob = await getPhotoBlob(ph);
+        if (!blob) continue;
 
-    // ✅ ВАЖНО — открытие галереи
-    img.onclick = () => openFullGallery(p.photos, (p.photos || []).indexOf(ph));
-    img.style.marginRight = "5px";
-    img.style.borderRadius = "6px";
+        const url = URL.createObjectURL(blob);
 
-    preview.appendChild(img);
-  }
+        const img = document.createElement("img");
+        img.src = url;
+        img.width = 50;
+        img.style.marginRight = "5px";
+        img.style.borderRadius = "6px";
 
-})();
+        img.onclick = () => openFullGallery(p.photos, (p.photos || []).indexOf(ph));
 
-    // 🔥 КЛИК ПО БЛОКУ = ВЫБОР ТОЧКИ
+        preview.appendChild(img);
+      }
+    })();
+
     d.onclick = (e) => {
-
-      // чтобы кнопки не ломали клик
       if (e.target.tagName === "BUTTON") return;
 
       activePointId = p.id;
 
-      PointStore.sync();   // обновить карту
-      openMyPoints();      // обновить список
+      PointStore.sync();
+      openMyPoints();
 
       centerWithTop(p.lat, p.lng);
     };
@@ -1314,6 +1348,22 @@ function publishFromList(id){
 window.onload = () => {
   init();
 };
+
+function updateStatusAdmin(id, status){
+
+  fetch(API, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      action: "updateStatus",
+      id,
+      status
+    })
+  }).then(() => {
+    loadPointsFromServer();
+  });
+
+}
 </script>
 </body>
 </html>
