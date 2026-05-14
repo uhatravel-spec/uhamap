@@ -709,17 +709,18 @@ if (editMode) {
 
 } else {
 
-  arr.push({
-    id: Date.now(),
-    lat: current.lat,
-    lng: current.lng,
-    category: category.value,
-    access: access.value,
-    desc: desc.value,
-    photos: [...photos],
-    status: "local",
-    published: false
-  });
+arr.push({
+  id: Date.now(),
+  lat: current.lat,
+  lng: current.lng,
+  category: category.value,
+  access: access.value,
+  desc: desc.value,
+  photos: [...photos],
+  status: "local",
+  published: false,
+  user_id: CURRENT_USER_ID   // 🔥 ВАЖНО ДОБАВИТЬ
+});
 }
 
 // ✅ ВОТ ЭТО ОБЯЗАТЕЛЬНО
@@ -869,7 +870,7 @@ const arr = Array.from(unique.values())
 
 .filter(p => {
   if (IS_ADMIN) return true; 
-  return p.status === "approved" || p.user_id == CURRENT_USER_ID;
+  return p.status === "approved" || String(p.user_id) === String(CURRENT_USER_ID);
 });
 
   if (!window.layer) {
@@ -982,7 +983,7 @@ function openMyPoints(){
 
       <button onclick="focusPoint(${p.lat},${p.lng})">📍 Показать</button>
 
-      ${p.status === "draft" ? `
+      ${p.status === "local" ? `
         <button onclick="editPoint(${p.id})">✏️ Изменить</button>
         <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
         <button onclick="publishFromList(${p.id})">📤 Отправить на модерацию</button>
@@ -1319,7 +1320,10 @@ async function loadPointsFromServer(){
     const res = await fetch(API + "?action=getPoints");
     const data = await res.json();
 
-    window.serverPoints = data;
+    window.serverPoints = data.map(p => ({
+  ...p,
+  user_id: p.user_id || 0
+}));
     PointStore.sync();
 
   } catch (err) {
@@ -1367,3 +1371,4 @@ function updateStatusAdmin(id, status){
 </script>
 </body>
 </html>
+
