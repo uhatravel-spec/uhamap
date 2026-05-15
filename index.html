@@ -872,22 +872,27 @@ sync(){
 
   const unique = new Map();
 
-  [...server, ...local].forEach(p => {
-    if (p && p.id) unique.set(p.id, p);
+  // 🔥 сначала сервер
+  server.forEach(p => {
+    if (p && p.id) unique.set("server_" + p.id, p);
+  });
+
+  // 🔥 потом локальные (НЕ затираются)
+  local.forEach(p => {
+    if (p && p.id) unique.set("local_" + p.id, p);
   });
 
 const arr = Array.from(unique.values())
 
 .filter(p => {
 
-  // админ видит всё
   if (IS_ADMIN) return true;
 
-  // 🔥 ВАЖНО: сервер может вернуть Approved / approved / APPROVED
   const status = String(p.status || "").toLowerCase();
-
-  // свои точки всегда видим
   const isOwn = String(p.user_id) === String(CURRENT_USER_ID);
+
+  // 🔥 локальные всегда видны
+  if (status === "local") return true;
 
   return status === "approved" || isOwn;
 });
