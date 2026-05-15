@@ -894,9 +894,14 @@ const arr = Array.from(unique.values())
 
   if (!window.layer) {
     window.layer = L.layerGroup().addTo(map);
-  } else {
-    window.layer.clearLayers();
   }
+
+  // ❗ вместо clearLayers полностью пересоздаём слой
+  if (window.layer) {
+    map.removeLayer(window.layer);
+  }
+
+window.layer = L.layerGroup().addTo(map);
 
   arr.forEach(p => {
 
@@ -924,6 +929,11 @@ const arr = Array.from(unique.values())
 
     window.layer.addLayer(m);
   });
+
+  
+  setTimeout(() => {
+    map.invalidateSize();
+  }, 100);
 }
 
 };
