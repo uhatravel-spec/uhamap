@@ -144,6 +144,7 @@ select, textarea, button {
 
 <div class="menu">
   <button onclick="openMyPoints()">📂 Мои точки</button>
+  <button onclick="openAllPoints()">🌍 Все точки</button>
   <button onclick="enableCreateMode()">➕ Создать точку</button>
 </div>
 
@@ -878,8 +879,17 @@ sync(){
 const arr = Array.from(unique.values())
 
 .filter(p => {
-  if (IS_ADMIN) return true; 
-  return p.status === "approved" || String(p.user_id) === String(CURRENT_USER_ID);
+
+  // админ видит всё
+  if (IS_ADMIN) return true;
+
+  // 🔥 ВАЖНО: сервер может вернуть Approved / approved / APPROVED
+  const status = String(p.status || "").toLowerCase();
+
+  // свои точки всегда видим
+  const isOwn = String(p.user_id) === String(CURRENT_USER_ID);
+
+  return status === "approved" || isOwn;
 });
 
   if (!window.layer) {
@@ -1048,6 +1058,55 @@ function openMyPoints(){
   box.style.height = "33vh";
 }
 
+function openAllPoints(){
+
+  ui.open = "my";
+  renderUI();
+
+  const box = myPanel;
+
+  box.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div class='handle'>—</div>
+      <button onclick="closeMyPanel()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
+    </div>
+    <h3>🌍 Все точки</h3>
+  `;
+
+  const server = window.serverPoints || [];
+
+  const approved = server.filter(p =>
+    String(p.status || "").toLowerCase() === "approved"
+  );
+
+  approved.forEach(p => {
+
+    const d = document.createElement("div");
+
+    d.style.padding = "10px";
+    d.style.marginBottom = "8px";
+    d.style.cursor = "pointer";
+
+    d.innerHTML = `
+      ${icons[p.category]} ${p.category}<br>
+      <small>${p.desc || ""}</small>
+    `;
+
+    d.onclick = () => {
+
+      activePointId = p.id;
+
+      centerWithTop(p.lat, p.lng);
+
+      // 🔥 открываем карточку как на карте
+      openPointInfo(p);
+    };
+
+    box.appendChild(d);
+  });
+
+  box.style.height = "33vh";
+}
 function toggleMyPanel(){
   if (myPanel.style.display === "none" || myPanel.style.display === "") {
     myPanel.style.display = "block";
@@ -1330,9 +1389,10 @@ async function loadPointsFromServer(){
     const data = await res.json();
 
     window.serverPoints = data.map(p => ({
-  ...p,
-  user_id: p.user_id || 0
-}));
+      ...p,
+      user_id: p.user_id || 0,
+      status: p.status || "approved" // 🔥 если сервер вдруг не прислал
+    }));
     PointStore.sync();
 
   } catch (err) {
