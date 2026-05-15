@@ -856,6 +856,15 @@ const PointStore = {
 sync(){
 
   if (!map) return;
+  
+  console.log("=== SYNC START ===");
+
+  const localDebug = JSON.parse(localStorage.getItem("points") || "[]");
+  console.log("LOCAL POINTS:", localDebug);
+
+  console.log("SERVER POINTS:", window.serverPoints);
+
+  console.log("CURRENT_USER_ID:", CURRENT_USER_ID);
 
   const local = JSON.parse(localStorage.getItem("points") || "[]");
   const server = window.serverPoints || [];
@@ -1371,4 +1380,3 @@ function updateStatusAdmin(id, status){
 </script>
 </body>
 </html>
-
