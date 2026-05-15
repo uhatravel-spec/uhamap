@@ -11,7 +11,11 @@
 
 <style>
 body { margin:0; font-family:Arial; }
-#map { height:100vh; }
+#map {
+  height: 100vh;
+  width: 100%;
+  touch-action: none; /* ❗ блокирует конфликт жестов */
+}
 
 .menu {
   position:fixed;
@@ -133,6 +137,39 @@ select, textarea, button {
   width:100%;
   margin-top:6px;
 }
+.point-card-header {
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10;
+  padding: 10px 0;
+  border-bottom: 1px solid #eee;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  position: fixed;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+#map {
+  touch-action: pan-x pan-y;
+  overscroll-behavior: none;
+}
+.panel-header {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #eee;
+}
 </style>
 </head>
 
@@ -149,9 +186,9 @@ select, textarea, button {
 </div>
 
 <div class="panel" id="panel">
-  <div style="display:flex; justify-content:space-between; align-items:center;">
-  <div class="handle" onclick="togglePanel()">—</div>
-  <button onclick="closePanel()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
+  <div class="panel-header">
+  <div class="handle">—</div>
+  <button onclick="closeMyPanel()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
 </div>
 
   <h3 id="title">📍 Новая точка</h3>
@@ -214,6 +251,10 @@ let current = null;
 let tempMarker = null;
 let userMarker = null;
 let userCircle = null;
+let galleryUrls = [];
+let galleryOverlay = null;
+let galleryIndex = 0;
+let lastLoadRequestId = 0;
 const ALLOWED_RADIUS = 15; // радиус = 15м (диаметр 30м)
 let photos = [];
 const DB_NAME = "uhamap_db";
@@ -277,6 +318,7 @@ function getPhotoBlob(id) {
 }
 
 let editMode = false;
+let isPublishing = false;
 let editId = null;
 let publishId = null;
 
@@ -330,11 +372,6 @@ function closeMyPanel(){
   renderUI();
 }
 
-function closeInfoPanel(){
-  infoPanel.style.display = "none";
-  ui.open = null;
-}
-
 function closeCreatePanel(){
   panelEl.style.display = "none";
   ui.open = null;
@@ -385,6 +422,13 @@ function centerWithTop(lat, lng) {
   }, 80);
 }
 
+function safeInvalidateMap() {
+  if (!map) return;
+
+  setTimeout(() => {
+    map.invalidateSize();
+  }, 120);
+}
 /* ICONS */
 const icons = {
   "новая_точка":"📌",
@@ -511,6 +555,7 @@ map.on("locationfound", e => {
 
 function enableCreateMode(){
 
+  resetModes();
   createMode = true;
   pointConfirmed = true;
   publishId = null;
@@ -874,13 +919,27 @@ sync(){
 
   // 🔥 сначала сервер
   server.forEach(p => {
-    if (p && p.id) unique.set("server_" + p.id, p);
-  });
+  if (!p || !p.id) return;
 
-  // 🔥 потом локальные (НЕ затираются)
-  local.forEach(p => {
-    if (p && p.id) unique.set("local_" + p.id, p);
+  unique.set(String(p.id), {
+    ...p,
+    source: "server"
   });
+});
+
+local.forEach(p => {
+  if (!p || !p.id) return;
+
+  const existing = unique.get(String(p.id));
+
+  // 🔥 сервер всегда важнее
+  if (existing && existing.source === "server") return;
+
+  unique.set(String(p.id), {
+    ...p,
+    source: "local"
+  });
+});
 
 const arr = Array.from(unique.values())
 
@@ -937,7 +996,7 @@ window.layer = L.layerGroup().addTo(map);
 
   
   setTimeout(() => {
-    map.invalidateSize();
+    safeInvalidateMap();
   }, 100);
 }
 
@@ -984,11 +1043,11 @@ function openMyPoints(){
   infoPanel.style.display = "none";
 
   box.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <div class='handle' onclick='toggleMyPanel()'>—</div>
+    <div class="panel-header">
+      <div class="handle">—</div>
       <button onclick="closeMyPanel()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
     </div>
-    <h3>Мои точки</h3>
+        <h3>Мои точки</h3>
   `;
 
   const arr = JSON.parse(localStorage.getItem("points") || "[]");
@@ -1081,8 +1140,8 @@ function openAllPoints(){
   const box = myPanel;
 
   box.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <div class='handle'>—</div>
+    <div class="panel-header">
+      <div class="handle">—</div>
       <button onclick="closeMyPanel()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
     </div>
     <h3>🌍 Все точки</h3>
@@ -1138,6 +1197,7 @@ function focusPoint(lat,lng){
 /* EDIT */
 function editPoint(id){
 
+  resetModes();
   closePointInfo();
   closeMyPanel();
 
@@ -1209,11 +1269,12 @@ function openPanel(){
   ui.open = "create";
   renderUI();
 
-  panelOpen = true;
+  ui.open = "create";
 
   if(current){
     coords.innerText=current.lat.toFixed(5)+", "+current.lng.toFixed(5);
   }
+  safeInvalidateMap();
 }
 
 function closePanel(){
@@ -1224,24 +1285,24 @@ function closePanel(){
     current = null;
   }
 
-  createMode = false;
-
-  panelEl.style.display = "none";
   ui.open = null;
-  panelOpen = false;
 
-  editMode = false;
-  editId = null;
+  resetModes();
 
   title.innerText = "📍 Новая точка";
 
   renderUI();
+  safeInvalidateMap();
 }
 function closeInfo(){
   infoPanel.style.display = "none";
   ui.open = null;
   panelOpen = false;
   activePointId = null;
+  if (activeMarker && activeMarker.getElement()) {
+  activeMarker.getElement().classList.remove("selected-marker");
+}
+activeMarker = null;
 }
 
 /* KEYBOARD FIX */
@@ -1260,6 +1321,9 @@ desc.addEventListener("blur", () => {
 });
 
 async function publish() {
+
+  if (isPublishing) return;
+  isPublishing = true;
 
   let arr = JSON.parse(localStorage.getItem("points") || "[]");
   const point = arr.find(p => p.id === publishId);
@@ -1310,7 +1374,9 @@ async function publish() {
   } catch (err) {
     console.error(err);
     alert("Ошибка сети");
+    isPublishing = false;
   }
+  isPublishing = false;
 }
 async function buildGalleryUrls(photoIds){
 
@@ -1385,6 +1451,19 @@ async function openFullGallery(photoIds, index = 0){
   galleryOverlay.appendChild(img);
   document.body.appendChild(galleryOverlay);
 }
+
+function resetModes() {
+  createMode = false;
+  editMode = false;
+  editId = null;
+  publishId = null;
+
+  if (tempMarker) {
+    map.removeLayer(tempMarker);
+    tempMarker = null;
+  }
+}
+
 function closeGallery(){
 
   if (galleryOverlay) {
@@ -1400,14 +1479,32 @@ async function loadPointsFromServer(){
 
   try {
 
+    const requestId = ++lastLoadRequestId;
     const res = await fetch(API + "?action=getPoints");
     const data = await res.json();
+    if (requestId !== lastLoadRequestId) return;
 
     window.serverPoints = data.map(p => ({
       ...p,
       user_id: p.user_id || 0,
       status: p.status || "approved" // 🔥 если сервер вдруг не прислал
     }));
+    if (requestId !== lastLoadRequestId) return;
+    const local = JSON.parse(localStorage.getItem("points") || "[]");
+
+    const updatedLocal = local.map(lp => {
+      const serverMatch = data.find(sp => String(sp.id) === String(lp.id));
+
+      if (!serverMatch) return lp;
+
+      return {
+        ...lp,
+        status: serverMatch.status || lp.status,
+        desc: serverMatch.description || lp.desc
+      };
+    });
+
+localStorage.setItem("points", JSON.stringify(updatedLocal));
     PointStore.sync();
 
   } catch (err) {
