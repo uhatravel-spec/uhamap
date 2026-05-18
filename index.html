@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>UhaMap</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -14,7 +14,7 @@ body { margin:0; font-family:Arial; }
 #map {
   height: 100vh;
   width: 100%;
-  touch-action: none; /* ❗ блокирует конфликт жестов */
+  touch-action: pan-x pan-y;
 }
 
 .menu {
@@ -43,22 +43,29 @@ body { margin:0; font-family:Arial; }
   border-radius:20px 20px 0 0;
   display:none;
   z-index:9999;
-
   height:33vh;
   max-height:90vh;
-
   overflow-y:auto;
   -webkit-overflow-scrolling: touch;
-
   box-shadow:0 -5px 20px rgba(0,0,0,0.2);
-  transition:height 0.2s ease;
+}
+
+.panel-header {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #eee;
 }
 
 .handle {
   text-align:center;
   font-size:22px;
   cursor:pointer;
-  margin-bottom:5px;
 }
 
 .row { margin-bottom:10px; }
@@ -67,26 +74,57 @@ select, textarea, button {
   width:100%;
   padding:10px;
   box-sizing: border-box;
+  margin-bottom:5px;
 }
+
+.photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+
 .photos img {
   width:70px;
   height:70px;
   object-fit:cover;
-  margin:5px;
   border-radius:8px;
+  cursor: pointer;
 }
+
+.photo-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.photo-delete {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: red;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .active-point {
   background: #e0f0ff !important;
   box-shadow: inset 0 0 0 2px #2a9d8f;
   border-radius: 10px;
 }
 
-/* selected marker */
 .selected-marker {
-  transform: scale(1.5);
+  transform: scale(1.3);
+  transition: transform 0.2s;
 }
 
-/* 🔵 user ring marker */
 .user-ring {
   width:18px;
   height:18px;
@@ -103,12 +141,12 @@ select, textarea, button {
   bottom: 0;
   background: #fff;
   border-radius: 18px 18px 0 0;
-  padding: 12px;
+  padding: 15px;
   z-index: 10000;
   box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
-  max-height: 45vh;
+  max-height: 60vh;
   overflow-y: auto;
-  transition: transform 0.2s ease;
+  transition: transform 0.3s ease;
 }
 
 .point-card.hidden {
@@ -119,31 +157,122 @@ select, textarea, button {
   display:flex;
   justify-content:space-between;
   align-items:center;
-  margin-bottom:8px;
+  margin-bottom:12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eee;
 }
 
 .point-card-title {
-  font-size:16px;
+  font-size:18px;
   font-weight:600;
 }
 
 .point-card-close {
   background:none;
   border:none;
-  font-size:18px;
+  font-size:24px;
+  cursor:pointer;
 }
 
 .point-card-actions button {
   width:100%;
-  margin-top:6px;
+  margin-top:8px;
 }
-.point-card-header {
-  position: sticky;
+
+.gallery-overlay {
+  position: fixed;
   top: 0;
-  background: white;
-  z-index: 10;
-  padding: 10px 0;
-  border-bottom: 1px solid #eee;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.95);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.gallery-image {
+  max-width: 90%;
+  max-height: 80%;
+  object-fit: contain;
+}
+
+.gallery-controls {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.gallery-btn {
+  background: rgba(255,255,255,0.3);
+  border: none;
+  color: white;
+  font-size: 30px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.gallery-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(255,255,255,0.3);
+  border: none;
+  color: white;
+  font-size: 24px;
+  padding: 10px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.photo-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.photo-gallery img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.photo-gallery img:hover {
+  transform: scale(1.05);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.status-approved {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-local {
+  background: #e2e3e5;
+  color: #383d41;
 }
 
 html, body {
@@ -151,24 +280,6 @@ html, body {
   width: 100%;
   overflow: hidden;
   position: fixed;
-  overscroll-behavior: none;
-  touch-action: none;
-}
-
-#map {
-  touch-action: pan-x pan-y;
-  overscroll-behavior: none;
-}
-.panel-header {
-  position: sticky;
-  top: 0;
-  background: #fff;
-  z-index: 20;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #eee;
 }
 </style>
 </head>
@@ -187,9 +298,9 @@ html, body {
 
 <div class="panel" id="panel">
   <div class="panel-header">
-  <div class="handle">—</div>
-  <button onclick="closeMyPanel()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
-</div>
+    <div class="handle">—</div>
+    <button onclick="closePanel()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
+  </div>
 
   <h3 id="title">📍 Новая точка</h3>
   <div id="coords"></div>
@@ -211,33 +322,32 @@ html, body {
     <textarea id="desc" placeholder="Описание"></textarea>
   </div>
 
-  <button onclick="requestCamera()">📸 Фото</button>
-  <input type="file" id="camera" accept="image/*" capture="environment">
+  <button onclick="requestCamera()">📸 Добавить фото</button>
+  <input type="file" id="camera" accept="image/*" capture="environment" style="display:none">
 
   <div class="photos" id="photos"></div>
   <div id="photoStatus" style="font-size:12px;color:gray;"></div>
 
-  <button onclick="saveDraft()">Сохранить</button>
-  <button onclick="publish()">Опубликовать</button>
-  <button onclick="closePanel()">Закрыть</button>
+  <button onclick="saveDraft()">💾 Сохранить черновик</button>
+  <button onclick="publish()">📤 Отправить на модерацию</button>
+  <button onclick="closePanel()">❌ Закрыть</button>
 </div>
 
 <div class="panel" id="myPanel"></div>
 
 <div class="panel" id="infoPanel" style="height:25vh;">
-  <div class="handle" onclick="closeInfo()">—</div>
+  <div class="panel-header">
+    <div class="handle">—</div>
+    <button onclick="closeInfo()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
+  </div>
   <div id="infoContent"></div>
 </div>
 
 <script>
 
 const tg = window.Telegram?.WebApp || null;
-
 const CURRENT_USER_ID = tg?.initDataUnsafe?.user?.id || 0;
-
-// временно список админов (позже перенесём в backend)
 const ADMIN_IDS = [8614991755];
-
 const IS_ADMIN = ADMIN_IDS.includes(CURRENT_USER_ID);
 
 if (tg && tg.expand) {
@@ -255,20 +365,39 @@ let galleryUrls = [];
 let galleryOverlay = null;
 let galleryIndex = 0;
 let lastLoadRequestId = 0;
-const ALLOWED_RADIUS = 15; // радиус = 15м (диаметр 30м)
+const ALLOWED_RADIUS = 15;
 let photos = [];
 const DB_NAME = "uhamap_db";
 const DB_VERSION = 1;
 const PHOTO_STORE = "photos";
 
 let db;
+let editMode = false;
+let isPublishing = false;
+let editId = null;
+let publishId = null;
+let activeMarker = null;
+let activePointId = null;
+let createMode = false;
+let userZoomChanged = false;
+let pointConfirmed = false;
+let ui = { open: null };
 
+const category = document.getElementById("category");
+const access = document.getElementById("access");
+const desc = document.getElementById("desc");
+const panelEl = document.getElementById("panel");
+const infoPanel = document.getElementById("infoPanel");
+const myPanel = document.getElementById("myPanel");
+const title = document.getElementById("title");
+const coords = document.getElementById("coords");
+
+// Инициализация IndexedDB
 function initDB() {
   const request = indexedDB.open(DB_NAME, DB_VERSION);
 
   request.onupgradeneeded = function (e) {
     const db = e.target.result;
-
     if (!db.objectStoreNames.contains(PHOTO_STORE)) {
       db.createObjectStore(PHOTO_STORE, { keyPath: "id" });
     }
@@ -283,32 +412,33 @@ function initDB() {
     console.error("IndexedDB error", e);
   };
 }
+
 function savePhotoBlob(blob) {
   return new Promise((resolve, reject) => {
-
     if (!db) {
       reject("DB not ready");
       return;
     }
 
     const id = Date.now() + "_" + Math.random().toString(16).slice(2);
-
     const tx = db.transaction([PHOTO_STORE], "readwrite");
     const store = tx.objectStore(PHOTO_STORE);
-
     const req = store.put({ id, blob });
 
     req.onsuccess = () => resolve(id);
     req.onerror = () => reject(req.error);
-
   });
 }
 
 function getPhotoBlob(id) {
   return new Promise((resolve) => {
+    if (!db) {
+      resolve(null);
+      return;
+    }
+    
     const tx = db.transaction([PHOTO_STORE], "readonly");
     const store = tx.objectStore(PHOTO_STORE);
-
     const req = store.get(id);
 
     req.onsuccess = () => {
@@ -317,119 +447,20 @@ function getPhotoBlob(id) {
   });
 }
 
-let editMode = false;
-let isPublishing = false;
-let editId = null;
-let publishId = null;
+async function uploadPhotoToServer(blob) {
+  const formData = new FormData();
+  formData.append("file", blob, "photo.jpg");
 
-let activeMarker = null;
-let activePointId = null;
+  const res = await fetch(API, {
+    method: "POST",
+    body: formData
+  });
 
-let createMode = false;
-
-let userZoomChanged = false;
-let panelOpen = false;
-let initialLocationSet = false;
-let pointConfirmed = false;
-const category = document.getElementById("category");
-const access = document.getElementById("access");
-const desc = document.getElementById("desc");
-
-/* PANEL */
-const ui = {
-  open: null // "create" | "my" | "info" | null
-};
-const panelEl = document.getElementById("panel");
-const infoPanel = document.getElementById("infoPanel");
-const myPanel = document.getElementById("myPanel");
-const title = document.getElementById("title");
-const coords = document.getElementById("coords");
-
-function setPanel(h){
-  panelEl.style.height = (window.innerHeight * h) + "px";
-}
-function renderUI(){
-
-  panelEl.style.display = "none";
-  myPanel.style.display = "none";
-  infoPanel.style.display = "none";
-
-  if (ui.open === "create") {
-    panelEl.style.display = "block";
-  }
-
-  if (ui.open === "my") {
-    myPanel.style.display = "block";
-  }
-
-  if (ui.open === "info") {
-    infoPanel.style.display = "block";
-  }
-}
-function closeMyPanel(){
-  myPanel.style.display = "none";
-  ui.open = null;
-  renderUI();
+  const data = await res.json();
+  return data.url; // сервер должен вернуть URL
 }
 
-function closeCreatePanel(){
-  panelEl.style.display = "none";
-  ui.open = null;
-}
-
-function togglePanel(){
-  panelOpen = !panelOpen;
-
-  if (panelOpen) {
-    setPanel(0.33);
-  } else {
-    setPanel(0.1);
-  }
-}
-
-/* OFFSET */
-function centerWithTop(lat, lng) {
-
-  if (!map) return;
-
-  const zoom = map.getZoom();
-
-  // ❗ останавливаем все анимации (это ключ к отсутствию "прыжков")
-  map.stop();
-
-  // 1. ставим центр БЕЗ анимации
-  map.setView([lat, lng], zoom, { animate: false });
-  // 2. ждём рендер
-  setTimeout(() => {
-
-    const size = map.getSize();
-
-    // 🎯 смещение как в Google Maps (точка выше центра)
-    const targetY = size.y * 0.38;
-
-    const point = map.latLngToContainerPoint([lat, lng]);
-
-    const offset = point.y - targetY;
-
-    // 🔒 убираем микродёргание
-    if (Math.abs(offset) < 3) return;
-
-    map.panBy([0, offset], {
-      animate: true,
-      duration: 0.25
-    });
-
-  }, 80);
-}
-
-function safeInvalidateMap() {
-  if (!map) return;
-
-  setTimeout(() => {
-    map.invalidateSize();
-  }, 120);
-}
-/* ICONS */
+// Иконки категорий
 const icons = {
   "новая_точка":"📌",
   "рыбалка":"🎣",
@@ -443,14 +474,14 @@ const icons = {
 
 function icon(cat){
   return L.divIcon({
-    html:`<div style="font-size:22px">${icons[cat] || "📍"}</div>`,
-    className:""
+    html:`<div style="font-size:22px; filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.3));">${icons[cat] || "📍"}</div>`,
+    className:"",
+    iconSize: [30, 30]
   });
 }
 
-/* INIT */
+// Инициализация карты
 function init(){
-
   map = L.map('map', {
     center: [55, 37],
     zoom: 10,
@@ -458,80 +489,66 @@ function init(){
   });
 
   const normal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-
-  const sat = L.tileLayer(
-    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-  );
+  const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
 
   normal.addTo(map);
 
   L.control.layers({
-    "Обычная":normal,
-    "Спутник":sat
+    "Обычная": normal,
+    "Спутник": sat
   }).addTo(map);
 
-  map.on("zoomend", ()=> {
-  userZoomChanged = true;
-});
+  map.on("zoomend", () => { userZoomChanged = true; });
+  map.on("dragstart", () => { userZoomChanged = true; });
 
-map.on("dragstart", ()=> {
-  userZoomChanged = true;
-});
+  map.locate({
+    watch: true,
+    enableHighAccuracy: true,
+    setView: false,
+    maximumAge: 0,
+    timeout: 10000
+  });
 
-map.locate({
-  watch: true,
-  enableHighAccuracy: true,
-  setView: false,
-  maximumAge: 0,
-  timeout: 10000
-});
+  let geoSet = false;
 
-let geoSet = false;
+  map.on("locationfound", e => {
+    const latlng = e.latlng;
 
-map.on("locationfound", e => {
+    if (!geoSet) {
+      setTimeout(() => {
+        centerWithTop(latlng.lat, latlng.lng);
+      }, 100);
+      geoSet = true;
+    }
 
-  const latlng = e.latlng;
+    if (!userMarker) {
+      userMarker = L.marker(latlng, {
+        icon: L.divIcon({
+          className: "",
+          html: `<div class="user-ring"></div>`
+        })
+      }).addTo(map);
+    } else {
+      userMarker.setLatLng(latlng);
+    }
 
-  if (!geoSet) {
-    setTimeout(() => {
-      centerWithTop(latlng.lat, latlng.lng);
-    }, 100);
-    geoSet = true;
-  }
+    if (!userCircle) {
+      userCircle = L.circle(latlng, {
+        radius: ALLOWED_RADIUS,
+        color: "#2a9d8f",
+        weight: 1,
+        fillOpacity: 0.05
+      }).addTo(map);
+    } else {
+      userCircle.setLatLng(latlng);
+    }
+  });
 
-  // 🔵 маркер пользователя
-  if (!userMarker) {
-    userMarker = L.marker(latlng, {
-      icon: L.divIcon({
-        className: "",
-        html: `<div class="user-ring"></div>`
-      })
-    }).addTo(map);
-  } else {
-    userMarker.setLatLng(latlng);
-  }
-
-  // 🔵 круг — ВСЕГДА отдельно
-  if (!userCircle) {
-    userCircle = L.circle(latlng, {
-      radius: ALLOWED_RADIUS,
-      color: "#2a9d8f",
-      weight: 1,
-      fillOpacity: 0.05
-    }).addTo(map);
-  } else {
-    userCircle.setLatLng(latlng);
-  }
-
-});
   map.on("click", e => {
-
     if (!createMode) return;
-
     current = e.latlng;
 
     if (!tempMarker) {
-
       tempMarker = L.marker(current, {
         icon: icon(category.value || "новая_точка"),
         draggable: true
@@ -539,6 +556,7 @@ map.on("locationfound", e => {
 
       tempMarker.on("dragend", (ev) => {
         current = ev.target.getLatLng();
+        if(coords) coords.innerText = current.lat.toFixed(5) + ", " + current.lng.toFixed(5);
       });
 
       openPanel();
@@ -553,43 +571,30 @@ map.on("locationfound", e => {
   loadPointsFromServer();
 }
 
-function enableCreateMode(){
-
-  resetModes();
-  createMode = true;
-  pointConfirmed = true;
-  publishId = null;
-
-  const center = map.getCenter();
-
-  current = {
-    lat: center.lat,
-    lng: center.lng
-  };
-
-  if (tempMarker) {
-    map.removeLayer(tempMarker);
-    tempMarker = null;
-  }
-
-  tempMarker = L.marker(current, {
-    icon: icon("новая_точка"),
-    draggable: true
-  }).addTo(map);
-
-  tempMarker.on("dragend", (e) => {
-    current = e.target.getLatLng();
-  });
-
-  openPanel();
+function centerWithTop(lat, lng) {
+  if (!map) return;
+  const zoom = map.getZoom();
+  map.stop();
+  map.setView([lat, lng], zoom, { animate: false });
+  
+  setTimeout(() => {
+    const size = map.getSize();
+    const targetY = size.y * 0.38;
+    const point = map.latLngToContainerPoint([lat, lng]);
+    const offset = point.y - targetY;
+    if (Math.abs(offset) < 3) return;
+    map.panBy([0, offset], { animate: true, duration: 0.25 });
+  }, 80);
 }
 
-/* CATEGORY */
-function fillCategories(){
+function safeInvalidateMap() {
+  if (!map) return;
+  setTimeout(() => { map.invalidateSize(); }, 120);
+}
 
+function fillCategories(){
   const sel = category;
   sel.innerHTML = "";
-
   Object.keys(icons).forEach(c => {
     let o = document.createElement("option");
     o.value = c;
@@ -597,41 +602,28 @@ function fillCategories(){
     sel.appendChild(o);
   });
 
-  // 🔥 ОДИН единственный обработчик изменения категории
   category.addEventListener("change", () => {
-
-    // если временная точка уже создана — меняем иконку сразу
     if (tempMarker) {
       tempMarker.setIcon(icon(category.value));
     }
-
   });
 }
 
-/* PHOTO FIX */
+// Фото
 const photosEl = document.getElementById("photos");
 const camera = document.getElementById("camera");
 
 function requestCamera(){
-
   if (!camera) return;
-
-  if (document.activeElement) {
-    document.activeElement.blur();
-  }
-
-  setTimeout(() => {
-    camera.click();
-  }, 100);
+  if (document.activeElement) document.activeElement.blur();
+  setTimeout(() => { camera.click(); }, 100);
 }
 
 camera.onchange = async (e) => {
-
   const file = e.target.files[0];
   if (!file) return;
 
   const status = document.getElementById("photoStatus");
-
   if (!db) {
     status.innerText = "⏳ Инициализация базы...";
     return;
@@ -640,505 +632,257 @@ camera.onchange = async (e) => {
   status.innerText = "📸 Загрузка фото...";
 
   try {
-
     const id = await savePhotoBlob(file);
-
     photos.push(id);
-
     renderPhotos();
-
     status.innerText = "✅ Фото загружено";
-
     camera.value = "";
-
   } catch (err) {
-
     console.error(err);
     status.innerText = "❌ Ошибка сохранения фото";
-
   }
 };
+
 async function renderPhotos(){
-
   photosEl.innerHTML = "";
-
   for (let i = 0; i < photos.length; i++) {
-
     const id = photos[i];
     const blob = await getPhotoBlob(id);
-
     if (!blob) continue;
-
     const url = URL.createObjectURL(blob);
-
+    
     const wrapper = document.createElement("div");
-    wrapper.style.display = "inline-block";
-    wrapper.style.position = "relative";
-
+    wrapper.className = "photo-wrapper";
+    
     const img = document.createElement("img");
     img.src = url;
-
-   img.onclick = () => {
-     openFullGallery(photos, i);
-   };
-
+    img.onclick = () => openFullGallery(photos, i);
+    
     const del = document.createElement("button");
-    del.innerText = "×";
-    del.style.position = "absolute";
-    del.style.top = "0";
-    del.style.right = "0";
-
-    del.onclick = () => {
+    del.textContent = "×";
+    del.className = "photo-delete";
+    del.onclick = (e) => {
+      e.stopPropagation();
       photos.splice(i, 1);
       renderPhotos();
     };
-
+    
     wrapper.appendChild(img);
     wrapper.appendChild(del);
     photosEl.appendChild(wrapper);
   }
 }
-function saveDraft(){
 
-  // 🔴 1. блокировка пока фото грузится
-  const status = document.getElementById("photoStatus");
+// Хранилище точек
+const PointStore = {
+  sync(){
+    if (!map) return;
+    
+    const local = JSON.parse(localStorage.getItem("points") || "[]");
+    const server = window.serverPoints || [];
+    const unique = new Map();
 
-  if (status && status.innerText === "📸 Загрузка фото...") {
-    alert("Подожди, фото ещё загружается");
-    return;
+    server.forEach(p => {
+      if (!p || !p.id) return;
+      unique.set(String(p.id), { ...p, source: "server" });
+    });
+
+    local.forEach(p => {
+      if (!p || !p.id) return;
+      const existing = unique.get(String(p.id));
+      if (existing && existing.source === "server") return;
+      unique.set(String(p.id), { ...p, source: "local" });
+    });
+
+    const arr = Array.from(unique.values()).filter(p => {
+      if (IS_ADMIN) return true;
+      const status = String(p.status || "").toLowerCase();
+      const isOwn = String(p.user_id) === String(CURRENT_USER_ID);
+      if (status === "local") return true;
+      return status === "approved" || isOwn;
+    });
+
+    if (!window.layer) {
+      window.layer = L.layerGroup().addTo(map);
+    }
+
+    if (window.layer) {
+      map.removeLayer(window.layer);
+    }
+
+    window.layer = L.layerGroup().addTo(map);
+
+    arr.forEach(p => {
+      if (!p.lat || !p.lng) return;
+      const m = L.marker([p.lat, p.lng], { icon: icon(p.category) });
+      p._marker = m;
+      m._data = p;
+
+      m.on("click", () => {
+        activePointId = p.id;
+        highlightMarker(m);
+        current = { lat: p.lat, lng: p.lng };
+        centerWithTop(p.lat, p.lng);
+        openPointInfo(p);
+      });
+
+      window.layer.addLayer(m);
+    });
+    
+    setTimeout(() => { safeInvalidateMap(); }, 100);
   }
+};
 
-  // 🔴 2. проверка точки
-  if (!current || !current.lat || !current.lng) {
-    alert("Сначала укажи точку на карте");
-    return;
-  }
-
-  // 🔴 3. проверка геолокации
-  if (!userMarker) {
-    alert("Геолокация не определена. Подожди пару секунд.");
-    return;
-  }
-
- // 🔵 4. проверка расстояния (создание + редактирование)
-  const userLatLng = userMarker.getLatLng();
-
-  const distance = map.distance(userLatLng, current);
-
-  console.log("DISTANCE:", distance);
-
-// 🚨 ограничение работает ТОЛЬКО при создании и редактировании
-  if (createMode || editMode) {
-
-  if (distance > ALLOWED_RADIUS) {
-    alert("Подойди ближе к точке (до 15 метров)");
-    return;
-  }
-
-}
-
-let arr = JSON.parse(localStorage.getItem("points") || "[]");
-
-if (editMode) {
-
-  arr = arr.map(p =>
-    p.id === editId
-      ? {
-          ...p,
-          category: category.value,
-          access: access.value,
-          desc: desc.value,
-          photos: [...photos]
-        }
-      : p
-  );
-
-} else {
-
-arr.push({
-  id: Date.now(),
-  lat: current.lat,
-  lng: current.lng,
-  category: category.value,
-  access: access.value,
-  desc: desc.value,
-  photos: [...photos],
-  status: "local",
-  published: false,
-  user_id: CURRENT_USER_ID   // 🔥 ВАЖНО ДОБАВИТЬ
-});
-}
-
-// ✅ ВОТ ЭТО ОБЯЗАТЕЛЬНО
-localStorage.setItem("points", JSON.stringify(arr));
-
-// ✅ потом обновление карты
-PointStore.sync();
-
-// очистка
-photos = [];
-renderPhotos();
-
-const statusEl = document.getElementById("photoStatus");
-if (statusEl) statusEl.innerText = "";
-
-publishId = null;
-
-closePanel();
-createMode = false;
-}
-/* INFO */
-function openInfo(p){
-  panelOpen = true;
-
-  activePointId = p.id;
-
-  const box = document.getElementById("infoContent");
-
-  box.innerHTML = `
-    <b>${icons[p.category]} ${p.category}</b><br>
-    📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
-    🚗 ${p.access}<br>
-    📝 ${p.desc || ""}<br>
-    ${(p.photos||[]).map((ph, i)=>`
-  <img src="${ph}" width="60" onclick='openFullGallery(${JSON.stringify(p.photos)}, ${i})'>
-`).join("")}
-    <button onclick="editPoint(${p.id})">✏️ Изменить</button>
-    <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
-  `;
-
-  infoPanel.style.display="block";
-}
-function openPointInfo(p){
-
+// Открытие информации о точке
+async function openPointInfo(p){
   publishId = p.id;
-
   const card = document.getElementById("pointCard");
+  
+  // Получаем URL фото для показа
+  let photoHtml = '<div class="photo-gallery">';
+  if (p.photos && p.photos.length > 0) {
+    for (let i = 0; i < p.photos.length; i++) {
+      const blob = await getPhotoBlob(p.photos[i]);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        photoHtml += `<img src="${url}" onclick="openFullGallery(${JSON.stringify(p.photos)}, ${i})">`;
+      }
+    }
+  } else if (p.photo_urls) {
+    // Для одобренных точек с сервера
+    try {
+      const urls = JSON.parse(p.photo_urls || "[]");
+      urls.forEach((url, i) => {
+        photoHtml += `<img src="${url}" onclick="openFullGalleryByUrls(${JSON.stringify(urls)}, ${i})">`;
+      });
+    } catch(e) {}
+  }
+  photoHtml += '</div>';
+  
+  const statusText = p.status === "approved" ? "🟢 Опубликовано" : 
+                     p.status === "pending" ? "🟡 На модерации" : "⚪ Черновик";
+  const statusClass = p.status === "approved" ? "status-approved" : 
+                      p.status === "pending" ? "status-pending" : "status-local";
 
   card.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <div class="point-card-title">
-        ${icons[p.category]} ${p.category}
-      </div>
-      <button onclick="closePointInfo()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
+    <div class="point-card-header">
+      <div class="point-card-title">${icons[p.category]} ${p.category}</div>
+      <button class="point-card-close" onclick="closePointInfo()">✖</button>
     </div>
-
-    <div style="font-size:13px; color:#555;">
+    <div style="font-size:13px; color:#555; margin-bottom:10px;">
       📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
       🚗 ${p.access}<br>
-      📝 ${p.desc || ""}<br>
+      📝 ${p.desc || "без описания"}<br>
+      <span class="status-badge ${statusClass}">${statusText}</span>
     </div>
-
-    <div id="pointPhotos"></div>
-
+    ${photoHtml}
     <div class="point-card-actions">
-
-  <!-- 🔒 ВСЕГДА показываем статус -->
-  <div style="margin-bottom:8px;">
-    ${p.status === "approved"
-      ? "🟢 Опубликовано"
-      : p.status === "pending"
-        ? "🟡 На модерации"
-        : "⚪ Локально"}
-  </div>
-
-  <!-- 👤 ТОЛЬКО СВОИ ТОЧКИ -->
-${
-  IS_ADMIN ? `
-    <button onclick="editPoint(${p.id})">✏️ Редактировать</button>
-    <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
-    <button onclick="updateStatusAdmin(${p.id}, 'approved')">✅ Одобрить</button>
-    <button onclick="updateStatusAdmin(${p.id}, 'rejected')">❌ Отклонить</button>
-  `
-  :
-  (p.user_id == CURRENT_USER_ID && p.status !== "approved") ? `
-    <button onclick="editPoint(${p.id})">✏️ Изменить</button>
-    <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
-
-    ${p.status !== "pending" ? `
-      <button onclick="publish()">📤 Отправить на модерацию</button>
-    ` : ""}
-  ` : ""
-}
-
-</div>
+      ${IS_ADMIN ? `
+        <button onclick="editPoint(${p.id})">✏️ Редактировать</button>
+        <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
+        <button onclick="updateStatusAdmin(${p.id}, 'approved')">✅ Одобрить</button>
+        <button onclick="updateStatusAdmin(${p.id}, 'rejected')">❌ Отклонить</button>
+      ` : (p.user_id == CURRENT_USER_ID && p.status !== "approved") ? `
+        <button onclick="editPoint(${p.id})">✏️ Редактировать</button>
+        <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
+        ${p.status !== "pending" ? `<button onclick="publishFromList(${p.id})">📤 Отправить на модерацию</button>` : ""}
+      ` : ""}
     </div>
   `;
 
-card.classList.remove("hidden");
-
-setTimeout(() => {
-
-  const container = document.getElementById("pointPhotos");
-  if (!container) return;
-
-  (async () => {
-    for (let i = 0; i < (p.photos || []).length; i++) {
-
-      const id = p.photos[i];
-      const blob = await getPhotoBlob(id);
-      if (!blob) continue;
-
-      const url = URL.createObjectURL(blob);
-
-      const img = document.createElement("img");
-      img.src = url;
-      img.width = 60;
-      img.style.margin = "4px";
-      img.style.borderRadius = "6px";
-
-      img.onclick = () => openFullGallery(p.photos, i);
-
-      container.appendChild(img);
-    }
-  })();
-
-}, 0);
-
-}
-/* STORE */
-const PointStore = {
-
-sync(){
-
-  if (!map) return;
-  
-  console.log("=== SYNC START ===");
-
-  const localDebug = JSON.parse(localStorage.getItem("points") || "[]");
-  console.log("LOCAL POINTS:", localDebug);
-
-  console.log("SERVER POINTS:", window.serverPoints);
-
-  console.log("CURRENT_USER_ID:", CURRENT_USER_ID);
-
-  const local = JSON.parse(localStorage.getItem("points") || "[]");
-  const server = window.serverPoints || [];
-
-  const unique = new Map();
-
-  // 🔥 сначала сервер
-  server.forEach(p => {
-  if (!p || !p.id) return;
-
-  unique.set(String(p.id), {
-    ...p,
-    source: "server"
-  });
-});
-
-local.forEach(p => {
-  if (!p || !p.id) return;
-
-  const existing = unique.get(String(p.id));
-
-  // 🔥 сервер всегда важнее
-  if (existing && existing.source === "server") return;
-
-  unique.set(String(p.id), {
-    ...p,
-    source: "local"
-  });
-});
-
-const arr = Array.from(unique.values())
-
-.filter(p => {
-
-  if (IS_ADMIN) return true;
-
-  const status = String(p.status || "").toLowerCase();
-  const isOwn = String(p.user_id) === String(CURRENT_USER_ID);
-
-  // 🔥 локальные всегда видны
-  if (status === "local") return true;
-
-  return status === "approved" || isOwn;
-});
-
-  if (!window.layer) {
-    window.layer = L.layerGroup().addTo(map);
-  }
-
-  // ❗ вместо clearLayers полностью пересоздаём слой
-  if (window.layer) {
-    map.removeLayer(window.layer);
-  }
-
-window.layer = L.layerGroup().addTo(map);
-
-  arr.forEach(p => {
-
-    if (!p.lat || !p.lng) return;
-
-    const m = L.marker([p.lat, p.lng], {
-      icon: icon(p.category)
-    });
-
-    p._marker = m;
-    m._data = p;
-
-    m.on("click", () => {
-
-      activePointId = p.id;
-
-      highlightMarker(m);
-
-      current = { lat: p.lat, lng: p.lng };
-
-      centerWithTop(p.lat, p.lng);
-
-      openPointInfo(p);
-    });
-
-    window.layer.addLayer(m);
-  });
-
-  
-  setTimeout(() => {
-    safeInvalidateMap();
-  }, 100);
+  card.classList.remove("hidden");
 }
 
-};
 function closePointInfo(){
   document.getElementById("pointCard").classList.add("hidden");
 }
 
-/* HIGHLIGHT */
 function highlightMarker(marker){
-
-  // убрать старую подсветку
   if (activeMarker && activeMarker.getElement()) {
     activeMarker.getElement().classList.remove("selected-marker");
   }
-
   activeMarker = marker;
-
-  // 🔥 ВАЖНО: ждать пока DOM появится
   setTimeout(() => {
     const el = marker.getElement();
-
-    if (el) {
-      el.classList.add("selected-marker");
-    }
+    if (el) el.classList.add("selected-marker");
   }, 0);
-}
-
-function getStatusText(p){
-
-  if (p.status === "pending") return "🟡 На модерации";
-  if (p.status === "approved") return "🟢 Опубликована";
-  if (p.status === "local") return "⚪ Локально сохранена";
-
-  return "⚪ Неизвестно";
 }
 
 function openMyPoints(){
   ui.open = "my";
   renderUI();
-
   const box = myPanel;
-  panelEl.style.display = "none";
-  infoPanel.style.display = "none";
-
   box.innerHTML = `
     <div class="panel-header">
       <div class="handle">—</div>
       <button onclick="closeMyPanel()" style="width:auto;padding:5px 10px;border-radius:8px;">✖</button>
     </div>
-        <h3>Мои точки</h3>
+    <h3>Мои точки</h3>
   `;
 
   const arr = JSON.parse(localStorage.getItem("points") || "[]");
-
-  arr.forEach(p => {
-
+  
+  for (const p of arr) {
     const d = document.createElement("div");
-
-    if (p.id === activePointId) {
-      d.classList.add("active-point");
-    }
-
+    if (p.id === activePointId) d.classList.add("active-point");
     d.style.padding = "10px";
     d.style.marginBottom = "8px";
     d.style.cursor = "pointer";
-
+    
+    const statusText = p.status === "approved" ? "🟢 Опубликовано" : 
+                       p.status === "pending" ? "🟡 На модерации" : "⚪ Черновик";
+    
     d.innerHTML = `
       ${icons[p.category]} ${p.category}<br>
       <small>${p.desc || ""}</small><br>
-
-      <div>${getStatusText(p)}</div>
-
-      <div class="preview"></div>
-
-      <br>
-
+      <div class="status-badge ${p.status === 'approved' ? 'status-approved' : p.status === 'pending' ? 'status-pending' : 'status-local'}">${statusText}</div>
+      <div class="preview" style="margin-top:5px;"></div>
       <button onclick="focusPoint(${p.lat},${p.lng})">📍 Показать</button>
-
       ${p.status === "local" ? `
         <button onclick="editPoint(${p.id})">✏️ Изменить</button>
         <button onclick="deletePoint(${p.id})">🗑 Удалить</button>
         <button onclick="publishFromList(${p.id})">📤 Отправить на модерацию</button>
       ` : ""}
-
-      ${p.status === "pending" ? `
-        <div style="color:orange">⏳ На модерации</div>
-      ` : ""}
-
-      ${p.status === "approved" ? `
-        <div style="color:green">🟢 Опубликовано</div>
-      ` : ""}
     `;
-
+    
     const preview = d.querySelector(".preview");
-
     (async () => {
       if (!preview) return;
-
       for (let ph of (p.photos || []).slice(0,3)) {
-
         const blob = await getPhotoBlob(ph);
         if (!blob) continue;
-
         const url = URL.createObjectURL(blob);
-
         const img = document.createElement("img");
         img.src = url;
         img.width = 50;
         img.style.marginRight = "5px";
         img.style.borderRadius = "6px";
-
-        img.onclick = () => openFullGallery(p.photos, (p.photos || []).indexOf(ph));
-
+        img.onclick = (e) => {
+          e.stopPropagation();
+          openFullGallery(p.photos, (p.photos || []).indexOf(ph));
+        };
         preview.appendChild(img);
       }
     })();
-
+    
     d.onclick = (e) => {
       if (e.target.tagName === "BUTTON") return;
-
       activePointId = p.id;
-
       PointStore.sync();
       openMyPoints();
-
       centerWithTop(p.lat, p.lng);
     };
-
+    
     box.appendChild(d);
-  });
-
+  }
+  
   box.style.height = "33vh";
 }
 
 function openAllPoints(){
-
   ui.open = "my";
   renderUI();
-
   const box = myPanel;
-
   box.innerHTML = `
     <div class="panel-header">
       <div class="handle">—</div>
@@ -1148,180 +892,159 @@ function openAllPoints(){
   `;
 
   const server = window.serverPoints || [];
-
-  const approved = server.filter(p =>
-    String(p.status || "").toLowerCase() === "approved"
-  );
+  const approved = server.filter(p => String(p.status || "").toLowerCase() === "approved");
 
   approved.forEach(p => {
-
     const d = document.createElement("div");
-
     d.style.padding = "10px";
     d.style.marginBottom = "8px";
     d.style.cursor = "pointer";
-
-    d.innerHTML = `
-      ${icons[p.category]} ${p.category}<br>
-      <small>${p.desc || ""}</small>
-    `;
-
+    d.innerHTML = `${icons[p.category]} ${p.category}<br><small>${p.desc || ""}</small>`;
     d.onclick = () => {
-
       activePointId = p.id;
-
       centerWithTop(p.lat, p.lng);
-
-      // 🔥 открываем карточку как на карте
       openPointInfo(p);
     };
-
     box.appendChild(d);
   });
-
+  
   box.style.height = "33vh";
 }
-function toggleMyPanel(){
-  if (myPanel.style.display === "none" || myPanel.style.display === "") {
-    myPanel.style.display = "block";
-    myPanel.style.height = "33vh";
-  } else {
-    myPanel.style.display = "none";
-  }
+
+function focusPoint(lat, lng){
+  centerWithTop(lat, lng);
 }
 
-function focusPoint(lat,lng){
-  centerWithTop(lat,lng, true);
-}
-
-/* EDIT */
-function editPoint(id){
-
+function enableCreateMode(){
   resetModes();
-  closePointInfo();
-  closeMyPanel();
-
-  const arr = JSON.parse(localStorage.getItem("points") || "[]");
-  const p = arr.find(x => x.id === id);
-  if (!p) return;
-
-  const layer = window.layer;
-  let marker = null;
-
-  layer.eachLayer(l => {
-    if (l._data && l._data.id === id) {
-      marker = l;
-    }
-  });
-
-  if (marker) {
-
-    marker.dragging.enable();
-    marker.setZIndexOffset(1000);
-
-    marker.on("dragend", (e) => {
-      const pos = e.target.getLatLng();
-
-      current = {
-        lat: pos.lat,
-        lng: pos.lng
-      };
-
-      coords.innerText =
-        current.lat.toFixed(5) + ", " + current.lng.toFixed(5);
-    });
-  }
-
-  editMode = true;
-  editId = id;
-  publishId = id;
-
-  current = { lat: p.lat, lng: p.lng };
-
-  category.value = p.category;
-  access.value = p.access;
-  desc.value = p.desc;
-
-  photos = [...(p.photos || [])];
-  renderPhotos();
-
-  title.innerText = "✏️ Редактирование";
-
-  closeInfo();
-  centerWithTop(p.lat, p.lng);
+  createMode = true;
+  pointConfirmed = true;
+  publishId = null;
+  const center = map.getCenter();
+  current = { lat: center.lat, lng: center.lng };
+  if (tempMarker) map.removeLayer(tempMarker);
+  tempMarker = L.marker(current, { icon: icon("новая_точка"), draggable: true }).addTo(map);
+  tempMarker.on("dragend", (e) => { current = e.target.getLatLng(); });
   openPanel();
 }
 
-/* DELETE */
-function deletePoint(id){
-  let arr=JSON.parse(localStorage.getItem("points")||"[]");
-  arr=arr.filter(x=>x.id!==id);
-
-  localStorage.setItem("points",JSON.stringify(arr));
-
-  PointStore.sync();
-  closeInfo();
-  openMyPoints();
-}
-
-/* PANEL */
 function openPanel(){
   ui.open = "create";
   renderUI();
-
-  ui.open = "create";
-
-  if(current){
-    coords.innerText=current.lat.toFixed(5)+", "+current.lng.toFixed(5);
+  if(current && coords){
+    coords.innerText = current.lat.toFixed(5) + ", " + current.lng.toFixed(5);
   }
   safeInvalidateMap();
 }
 
 function closePanel(){
-
   if (!editMode && tempMarker) {
     map.removeLayer(tempMarker);
     tempMarker = null;
     current = null;
   }
-
   ui.open = null;
-
   resetModes();
-
   title.innerText = "📍 Новая точка";
-
   renderUI();
   safeInvalidateMap();
 }
+
+function closeMyPanel(){
+  myPanel.style.display = "none";
+  ui.open = null;
+  renderUI();
+}
+
 function closeInfo(){
   infoPanel.style.display = "none";
   ui.open = null;
-  panelOpen = false;
   activePointId = null;
   if (activeMarker && activeMarker.getElement()) {
-  activeMarker.getElement().classList.remove("selected-marker");
-}
-activeMarker = null;
-}
-
-/* KEYBOARD FIX */
-document.addEventListener("touchstart",e=>{
-  if(!e.target.closest("textarea")){
-    document.activeElement.blur();
+    activeMarker.getElement().classList.remove("selected-marker");
   }
-});
+  activeMarker = null;
+}
 
-desc.addEventListener("focus", () => {
-  setPanel(0.9);
-});
+function renderUI(){
+  panelEl.style.display = "none";
+  myPanel.style.display = "none";
+  infoPanel.style.display = "none";
+  if (ui.open === "create") panelEl.style.display = "block";
+  if (ui.open === "my") myPanel.style.display = "block";
+  if (ui.open === "info") infoPanel.style.display = "block";
+}
 
-desc.addEventListener("blur", () => {
-  setTimeout(() => setPanel(0.33), 150);
-});
+function resetModes() {
+  createMode = false;
+  editMode = false;
+  editId = null;
+  publishId = null;
+  if (tempMarker) {
+    map.removeLayer(tempMarker);
+    tempMarker = null;
+  }
+}
+
+function saveDraft(){
+  const status = document.getElementById("photoStatus");
+  if (status && status.innerText === "📸 Загрузка фото...") {
+    alert("Подожди, фото ещё загружается");
+    return;
+  }
+  if (!current || !current.lat || !current.lng) {
+    alert("Сначала укажи точку на карте");
+    return;
+  }
+  if (!userMarker) {
+    alert("Геолокация не определена. Подожди пару секунд.");
+    return;
+  }
+
+  const userLatLng = userMarker.getLatLng();
+  const distance = map.distance(userLatLng, current);
+  if ((createMode || editMode) && distance > ALLOWED_RADIUS) {
+    alert("Подойди ближе к точке (до 15 метров)");
+    return;
+  }
+
+  let arr = JSON.parse(localStorage.getItem("points") || "[]");
+  
+  if (editMode) {
+    arr = arr.map(p => p.id === editId ? {
+      ...p,
+      category: category.value,
+      access: access.value,
+      desc: desc.value,
+      photos: [...photos]
+    } : p);
+  } else {
+    arr.push({
+      id: Date.now(),
+      lat: current.lat,
+      lng: current.lng,
+      category: category.value,
+      access: access.value,
+      desc: desc.value,
+      photos: [...photos],
+      status: "local",
+      user_id: CURRENT_USER_ID
+    });
+  }
+
+  localStorage.setItem("points", JSON.stringify(arr));
+  PointStore.sync();
+  
+  photos = [];
+  renderPhotos();
+  const statusEl = document.getElementById("photoStatus");
+  if (statusEl) statusEl.innerText = "";
+  publishId = null;
+  closePanel();
+  createMode = false;
+}
 
 async function publish() {
-
   if (isPublishing) return;
   isPublishing = true;
 
@@ -1330,155 +1053,117 @@ async function publish() {
 
   if (!point) {
     alert("Точка не найдена");
+    isPublishing = false;
     return;
   }
 
   if (point.status === "pending") {
     alert("Уже отправлено");
+    isPublishing = false;
     return;
   }
 
   try {
+  // 1. Загружаем все фото
+let photoUrls = [];
 
-    const res = await fetch(API, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8"
-      },
-      body: JSON.stringify({
-        action: "savePoint",
-        data: {
-          id: point.id,
-          lat: point.lat,
-          lng: point.lng,
-          category: point.category,
-          access: point.access,
-          description: point.desc,
-          user_id: tg?.initDataUnsafe?.user?.id || 0,
-          user_name: tg?.initDataUnsafe?.user?.first_name || "user",
-          photo_url: (point.photos || []).join(",")
-        }
-      })
-    });
+for (let id of (point.photos || [])) {
+  const blob = await getPhotoBlob(id);
+  if (!blob) continue;
+
+  try {
+    const url = await uploadPhotoToServer(blob);
+    photoUrls.push(url);
+  } catch (e) {
+    console.error("Ошибка загрузки фото", e);
+  }
+}
+
+// 2. Отправляем точку
+const res = await fetch(API, {
+  method: "POST",
+  headers: { "Content-Type": "text/plain;charset=utf-8" },
+  body: JSON.stringify({
+    action: "savePoint",
+    data: {
+      id: point.id,
+      lat: point.lat,
+      lng: point.lng,
+      category: point.category,
+      access: point.access,
+      description: point.desc,
+      user_id: CURRENT_USER_ID,
+      user_name: tg?.initDataUnsafe?.user?.first_name || "user",
+      photo_urls: photoUrls // ← ВАЖНО
+    }
+  })
+});
 
     const text = await res.text();
     console.log("SERVER RESPONSE:", text);
-
+    
     point.status = "pending";
     localStorage.setItem("points", JSON.stringify(arr));
-
     PointStore.sync();
-
     alert("Отправлено на модерацию");
-
+    closePanel();
   } catch (err) {
     console.error(err);
     alert("Ошибка сети");
-    isPublishing = false;
   }
   isPublishing = false;
 }
-async function buildGalleryUrls(photoIds){
 
-  galleryUrls = [];
-
-  for (let id of photoIds) {
-    const blob = await getPhotoBlob(id);
-    if (blob) {
-      galleryUrls.push(URL.createObjectURL(blob));
-    }
+function publishFromList(id){
+  let arr = JSON.parse(localStorage.getItem("points") || "[]");
+  const point = arr.find(p => p.id === id);
+  if (!point) {
+    alert("Точка не найдена");
+    return;
   }
+  if (point.status === "pending") {
+    alert("Уже отправлено");
+    return;
+  }
+  publishId = id;
+  publish();
 }
 
-async function openFullGallery(photoIds, index = 0){
+function editPoint(id){
+  resetModes();
+  closePointInfo();
+  closeMyPanel();
 
-  galleryIndex = index;
+  const arr = JSON.parse(localStorage.getItem("points") || "[]");
+  const p = arr.find(x => x.id === id);
+  if (!p) return;
 
-  if (galleryOverlay) {
-    galleryOverlay.remove();
-    galleryOverlay = null;
-  }
-
-  await buildGalleryUrls(photoIds);
-
-  if (galleryUrls.length === 0) return;
-
-  galleryOverlay = document.createElement("div");
-  galleryOverlay.style.position = "fixed";
-  galleryOverlay.style.top = "0";
-  galleryOverlay.style.left = "0";
-  galleryOverlay.style.width = "100%";
-  galleryOverlay.style.height = "100%";
-  galleryOverlay.style.background = "rgba(0,0,0,0.95)";
-  galleryOverlay.style.display = "flex";
-  galleryOverlay.style.alignItems = "center";
-  galleryOverlay.style.justifyContent = "center";
-  galleryOverlay.style.zIndex = "999999";
-
-  const img = document.createElement("img");
-  img.style.maxWidth = "92%";
-  img.style.maxHeight = "80%";
-
-  const render = () => {
-    img.src = galleryUrls[galleryIndex];
-  };
-
-  render();
-
-  galleryOverlay.onclick = closeGallery;
-
-  let startX = 0;
-
-  galleryOverlay.addEventListener("touchstart", e => {
-    startX = e.touches[0].clientX;
-  });
-
-  galleryOverlay.addEventListener("touchend", e => {
-
-    let endX = e.changedTouches[0].clientX;
-
-    if (endX < startX - 40 && galleryIndex < galleryUrls.length - 1) {
-      galleryIndex++;
-      render();
-    }
-
-    if (endX > startX + 40 && galleryIndex > 0) {
-      galleryIndex--;
-      render();
-    }
-  });
-
-  galleryOverlay.appendChild(img);
-  document.body.appendChild(galleryOverlay);
+  editMode = true;
+  editId = id;
+  publishId = id;
+  current = { lat: p.lat, lng: p.lng };
+  category.value = p.category;
+  access.value = p.access;
+  desc.value = p.desc;
+  photos = [...(p.photos || [])];
+  renderPhotos();
+  title.innerText = "✏️ Редактирование";
+  closeInfo();
+  centerWithTop(p.lat, p.lng);
+  openPanel();
 }
 
-function resetModes() {
-  createMode = false;
-  editMode = false;
-  editId = null;
-  publishId = null;
-
-  if (tempMarker) {
-    map.removeLayer(tempMarker);
-    tempMarker = null;
-  }
+function deletePoint(id){
+  let arr = JSON.parse(localStorage.getItem("points") || "[]");
+  arr = arr.filter(x => x.id !== id);
+  localStorage.setItem("points", JSON.stringify(arr));
+  PointStore.sync();
+  closeInfo();
+  openMyPoints();
 }
 
-function closeGallery(){
-
-  if (galleryOverlay) {
-    galleryOverlay.remove();
-    galleryOverlay = null;
-  }
-
-  // чистим URL чтобы не текла память
-  galleryUrls.forEach(url => URL.revokeObjectURL(url));
-  galleryUrls = [];
-}
 async function loadPointsFromServer(){
-
   try {
-
     const requestId = ++lastLoadRequestId;
     const res = await fetch(API + "?action=getPoints");
     const data = await res.json();
@@ -1487,16 +1172,17 @@ async function loadPointsFromServer(){
     window.serverPoints = data.map(p => ({
       ...p,
       user_id: p.user_id || 0,
-      status: p.status || "approved" // 🔥 если сервер вдруг не прислал
+      status: p.status || "approved",
+      photo_urls: p.photo_urls || "[]"
     }));
+    
     if (requestId !== lastLoadRequestId) return;
+    
     const local = JSON.parse(localStorage.getItem("points") || "[]");
 
     const updatedLocal = local.map(lp => {
       const serverMatch = data.find(sp => String(sp.id) === String(lp.id));
-
       if (!serverMatch) return lp;
-
       return {
         ...lp,
         status: serverMatch.status || lp.status,
@@ -1504,7 +1190,7 @@ async function loadPointsFromServer(){
       };
     });
 
-localStorage.setItem("points", JSON.stringify(updatedLocal));
+    localStorage.setItem("points", JSON.stringify(updatedLocal));
     PointStore.sync();
 
   } catch (err) {
@@ -1512,43 +1198,196 @@ localStorage.setItem("points", JSON.stringify(updatedLocal));
   }
 }
 
-function publishFromList(id){
-
-  let arr = JSON.parse(localStorage.getItem("points") || "[]");
-  const point = arr.find(p => p.id === id);
-
-  if (!point) {
-    alert("Точка не найдена");
-    return;
-  }
-
-  if (point.published) {
-    alert("Уже отправлено");
-    return;
-  }
-
-  publishId = id;
-  publish();
-}
-window.onload = () => {
-  init();
-};
-
 function updateStatusAdmin(id, status){
-
   fetch(API, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify({
       action: "updateStatus",
-      id,
-      status
+      id: id,
+      status: status
     })
   }).then(() => {
     loadPointsFromServer();
+    alert(`Статус обновлен на ${status}`);
   });
-
 }
+
+// Галерея для просмотра фото
+async function openFullGallery(photoIds, index = 0){
+  galleryIndex = index;
+  
+  if (galleryOverlay) {
+    galleryOverlay.remove();
+    galleryOverlay = null;
+  }
+  
+  galleryUrls = [];
+  for (let id of photoIds) {
+    const blob = await getPhotoBlob(id);
+    if (blob) {
+      galleryUrls.push(URL.createObjectURL(blob));
+    }
+  }
+  
+  if (galleryUrls.length === 0) return;
+  
+  galleryOverlay = document.createElement("div");
+  galleryOverlay.className = "gallery-overlay";
+  
+  const img = document.createElement("img");
+  img.className = "gallery-image";
+  
+  const render = () => {
+    img.src = galleryUrls[galleryIndex];
+  };
+  render();
+  
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "✕";
+  closeBtn.className = "gallery-close";
+  closeBtn.onclick = closeGallery;
+  
+  const prevBtn = document.createElement("button");
+  prevBtn.textContent = "◀";
+  prevBtn.className = "gallery-btn";
+  prevBtn.onclick = () => {
+    if (galleryIndex > 0) {
+      galleryIndex--;
+      render();
+    }
+  };
+  
+  const nextBtn = document.createElement("button");
+  nextBtn.textContent = "▶";
+  nextBtn.className = "gallery-btn";
+  nextBtn.onclick = () => {
+    if (galleryIndex < galleryUrls.length - 1) {
+      galleryIndex++;
+      render();
+    }
+  };
+  
+  const controls = document.createElement("div");
+  controls.className = "gallery-controls";
+  controls.appendChild(prevBtn);
+  controls.appendChild(nextBtn);
+  
+  galleryOverlay.appendChild(closeBtn);
+  galleryOverlay.appendChild(img);
+  galleryOverlay.appendChild(controls);
+  
+  // Свайпы для мобильных
+  let startX = 0;
+  galleryOverlay.addEventListener("touchstart", e => {
+    startX = e.touches[0].clientX;
+  });
+  
+  galleryOverlay.addEventListener("touchend", e => {
+    const endX = e.changedTouches[0].clientX;
+    if (endX < startX - 50 && galleryIndex < galleryUrls.length - 1) {
+      galleryIndex++;
+      render();
+    }
+    if (endX > startX + 50 && galleryIndex > 0) {
+      galleryIndex--;
+      render();
+    }
+  });
+  
+  document.body.appendChild(galleryOverlay);
+}
+
+function openFullGalleryByUrls(urls, index = 0){
+  galleryIndex = index;
+  
+  if (galleryOverlay) {
+    galleryOverlay.remove();
+    galleryOverlay = null;
+  }
+  
+  galleryUrls = [...urls];
+  if (galleryUrls.length === 0) return;
+  
+  galleryOverlay = document.createElement("div");
+  galleryOverlay.className = "gallery-overlay";
+  
+  const img = document.createElement("img");
+  img.className = "gallery-image";
+  
+  const render = () => {
+    img.src = galleryUrls[galleryIndex];
+  };
+  render();
+  
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "✕";
+  closeBtn.className = "gallery-close";
+  closeBtn.onclick = closeGallery;
+  
+  const prevBtn = document.createElement("button");
+  prevBtn.textContent = "◀";
+  prevBtn.className = "gallery-btn";
+  prevBtn.onclick = () => {
+    if (galleryIndex > 0) {
+      galleryIndex--;
+      render();
+    }
+  };
+  
+  const nextBtn = document.createElement("button");
+  nextBtn.textContent = "▶";
+  nextBtn.className = "gallery-btn";
+  nextBtn.onclick = () => {
+    if (galleryIndex < galleryUrls.length - 1) {
+      galleryIndex++;
+      render();
+    }
+  };
+  
+  const controls = document.createElement("div");
+  controls.className = "gallery-controls";
+  controls.appendChild(prevBtn);
+  controls.appendChild(nextBtn);
+  
+  galleryOverlay.appendChild(closeBtn);
+  galleryOverlay.appendChild(img);
+  galleryOverlay.appendChild(controls);
+  
+  document.body.appendChild(galleryOverlay);
+}
+
+function closeGallery(){
+  if (galleryOverlay) {
+    galleryOverlay.remove();
+    galleryOverlay = null;
+  }
+  galleryUrls.forEach(url => URL.revokeObjectURL(url));
+  galleryUrls = [];
+}
+
+// Обработка клавиатуры
+document.addEventListener("touchstart", e => {
+  if(!e.target.closest("textarea")){
+    document.activeElement.blur();
+  }
+});
+
+if (desc) {
+  desc.addEventListener("focus", () => {
+    if (panelEl) panelEl.style.height = "80vh";
+  });
+  
+  desc.addEventListener("blur", () => {
+    setTimeout(() => { if (panelEl) panelEl.style.height = "33vh"; }, 150);
+  });
+}
+
+// Запуск
+window.onload = () => {
+  init();
+};
+
 </script>
 </body>
 </html>
