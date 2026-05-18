@@ -448,16 +448,23 @@ function getPhotoBlob(id) {
 }
 
 async function uploadPhotoToServer(blob) {
-  const formData = new FormData();
-  formData.append("file", blob, "photo.jpg");
+  const base64 = await new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.readAsDataURL(blob);
+  });
 
   const res = await fetch(API, {
     method: "POST",
-    body: formData
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      action: "uploadPhoto",
+      file: base64
+    })
   });
 
   const data = await res.json();
-  return data.url; // сервер должен вернуть URL
+  return data.url;
 }
 
 // Иконки категорий
