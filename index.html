@@ -448,23 +448,24 @@ function getPhotoBlob(id) {
 }
 
 async function uploadPhotoToServer(blob) {
-  const base64 = await new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(",")[1]);
-    reader.readAsDataURL(blob);
-  });
+
+  const formData = new FormData();
+  formData.append("action", "uploadPhoto");
+  formData.append("file", blob);
 
   const res = await fetch(API, {
     method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({
-      action: "uploadPhoto",
-      file: base64
-    })
+    body: formData
   });
 
-  const data = await res.json();
-  return data.url;
+  const text = await res.text();
+
+  try {
+    const data = JSON.parse(text);
+    return data.url;
+  } catch (e) {
+    return null;
+  }
 }
 
 // Иконки категорий
@@ -1173,7 +1174,13 @@ async function loadPointsFromServer(){
   try {
     const requestId = ++lastLoadRequestId;
     const res = await fetch(API + "?action=getPoints");
-    const data = await res.json();
+    let data;
+try {
+  data = JSON.parse(text);
+} catch (e) {
+  console.log("❌ JSON PARSE ERROR", e);
+  return null;
+}
     if (requestId !== lastLoadRequestId) return;
 
     window.serverPoints = data.map(p => ({
