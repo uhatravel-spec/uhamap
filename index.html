@@ -450,14 +450,13 @@ function getPhotoBlob(id) {
 async function uploadPhotoToServer(blob) {
   const reader = new FileReader();
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     reader.onloadend = async () => {
       const base64 = reader.result.split(",")[1];
 
       try {
-        await fetch(API, {
+        const res = await fetch(API, {
           method: "POST",
-          mode: "no-cors",
           headers: {
             "Content-Type": "application/json"
           },
@@ -467,10 +466,17 @@ async function uploadPhotoToServer(blob) {
           })
         });
 
-        // ❗ мы НЕ читаем response вообще
-        // потому что CORS блокирует его
+        const data = await res.json().catch(() => null);
 
-        resolve("uploaded"); // просто факт отправки
+        console.log("UPLOAD RESPONSE:", data);
+
+        if (!data || !data.url) {
+          console.error("NO FILE URL RETURNED");
+          resolve(null);
+          return;
+        }
+
+        resolve(data.url);
 
       } catch (e) {
         console.error("UPLOAD FAIL", e);
@@ -1105,7 +1111,8 @@ for (let id of (point.photos || [])) {
 
   try {
     await uploadPhotoToServer(blob);
-    photoUrls.push("uploaded");
+    const url = await uploadPhotoToServer(blob);
+    if (url) photoUrls.push(url);
   } catch (e) {
     console.error("Ошибка загрузки фото", e);
   }
