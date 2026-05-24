@@ -457,9 +457,6 @@ async function uploadPhotoToServer(blob) {
       try {
         const res = await fetch(API, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
           body: JSON.stringify({
             action: "uploadPhoto",
             file: base64
@@ -471,7 +468,6 @@ async function uploadPhotoToServer(blob) {
         console.log("UPLOAD RESPONSE:", data);
 
         if (!data || !data.url) {
-          console.error("NO FILE URL RETURNED");
           resolve(null);
           return;
         }
@@ -1110,7 +1106,6 @@ for (let id of (point.photos || [])) {
   if (!blob) continue;
 
   try {
-    await uploadPhotoToServer(blob);
     const url = await uploadPhotoToServer(blob);
     if (url) photoUrls.push(url);
   } catch (e) {
