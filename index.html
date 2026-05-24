@@ -448,6 +448,9 @@ function getPhotoBlob(id) {
 }
 
 async function uploadPhotoToServer(blob) {
+
+  console.log("UPLOAD FUNCTION CALLED");
+  
   const reader = new FileReader();
 
   return new Promise((resolve, reject) => {
@@ -457,10 +460,13 @@ async function uploadPhotoToServer(blob) {
       try {
         const res = await fetch(API, {
           method: "POST",
+          headers: {
+            "Content-Type": "text/plain"
+          },
           body: JSON.stringify({
             action: "uploadPhoto",
             file: base64
-          })
+         })
         });
 
         const text = await res.text();
@@ -1103,7 +1109,12 @@ async function publish() {
   // 1. Загружаем все фото
 let photoUrls = [];
 
+console.log("UPLOAD LOOP START");
+console.log("POINT PHOTOS:", point.photos);
+
 for (let id of (point.photos || [])) {
+
+  console.log("PHOTO ID:", id);
   const blob = await getPhotoBlob(id);
   if (!blob) continue;
 
