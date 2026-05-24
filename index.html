@@ -457,33 +457,24 @@ async function uploadPhotoToServer(blob) {
       try {
         const res = await fetch(API, {
           method: "POST",
-          mode: "no-cors",
           body: JSON.stringify({
-            action: "savePoint",
-            data: {
-              id: point.id,
-              lat: point.lat,
-              lng: point.lng,
-              category: point.category,
-              access: point.access,
-              description: point.desc,
-              user_id: CURRENT_USER_ID,
-              user_name: tg?.initDataUnsafe?.user?.first_name || "user",
-              photo_urls: photoUrls
-            }
+            action: "uploadPhoto",
+            file: base64
           })
         });
 
-        const data = await res.json().catch(() => null);
+        const text = await res.text();
 
-        console.log("UPLOAD RESPONSE:", data);
-
-        if (!data || !data.url) {
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          console.log("UPLOAD PARSE ERROR:", text);
           resolve(null);
           return;
         }
 
-        resolve(data.url);
+        resolve(data.url || null);
 
       } catch (e) {
         console.error("UPLOAD FAIL", e);
@@ -1127,7 +1118,6 @@ for (let id of (point.photos || [])) {
 // 2. Отправляем точку
 const res = await fetch(API, {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
     action: "savePoint",
     data: {
@@ -1260,7 +1250,6 @@ try {
 function updateStatusAdmin(id, status){
   fetch(API, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       action: "updateStatus",
       id: id,
@@ -1452,4 +1441,3 @@ window.onload = () => {
 </script>
 </body>
 </html>
-
