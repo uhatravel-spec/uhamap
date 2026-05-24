@@ -459,7 +459,7 @@ async function uploadPhotoToServer(blob) {
           method: "POST",
           mode: "no-cors",
           headers: {
-            "Content-Type": "text/plain;charset=utf-8"
+            "Content-Type": "application/json"
           },
           body: JSON.stringify({
             action: "uploadPhoto",
@@ -1114,7 +1114,7 @@ for (let id of (point.photos || [])) {
 // 2. Отправляем точку
 const res = await fetch(API, {
   method: "POST",
-  headers: { "Content-Type": "text/plain;charset=utf-8" },
+  headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
     action: "savePoint",
     data: {
@@ -1247,7 +1247,7 @@ try {
 function updateStatusAdmin(id, status){
   fetch(API, {
     method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       action: "updateStatus",
       id: id,
