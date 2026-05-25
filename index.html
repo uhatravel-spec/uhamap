@@ -786,7 +786,9 @@ async function openPointInfo(p){
         photoHtml += `<img src="${url}" onclick="openFullGallery(${JSON.stringify(p.photos)}, ${i})">`;
       }
     }
-  } else if (p.photo_urls) {
+  }
+
+if (p.photo_urls) {
 
   try {
 
@@ -836,7 +838,7 @@ async function openPointInfo(p){
     <div style="font-size:13px; color:#555; margin-bottom:10px;">
       📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}<br>
       🚗 ${p.access}<br>
-      📝 ${p.desc || "без описания"}<br>
+      📝 ${(p.description || p.desc || "без описания")}<br>
       <span class="status-badge ${statusClass}">${statusText}</span>
     </div>
     ${photoHtml}
