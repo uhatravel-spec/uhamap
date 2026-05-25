@@ -248,9 +248,7 @@ select, textarea, button {
   cursor: pointer;
   background: #eee;
 }
-.photo-gallery img {
-  border: 2px solid red;
-}
+
 .photo-gallery img:hover {
   transform: scale(1.05);
 }
@@ -791,36 +789,19 @@ async function openPointInfo(p){
     }
   }
 
-if (p.photo_urls) {
+if (Array.isArray(p.photos) && p.photos.length > 0) {
 
-  try {
+  for (let i = 0; i < p.photos.length; i++) {
+    const blob = await getPhotoBlob(p.photos[i]);
 
-    let urls = p.photo_urls;
+    if (!blob) continue;
 
-    // если строка -> parse
-    if (typeof urls === "string") {
-      urls = JSON.parse(urls || "[]");
-    }
+    const url = URL.createObjectURL(blob);
 
-    // защита
-    if (!Array.isArray(urls)) {
-      urls = [];
-    }
-
-    console.log("PHOTO URLS:", urls);
-
-    urls.forEach((url, i) => {
-
-      photoHtml += `
-        <img src="https://via.placeholder.com/200x150" style="border:2px solid red;">
-      `;
-
-    });
-
-  } catch(e) {
-
-    console.log("PHOTO URL PARSE ERROR", e);
-
+    photoHtml += `
+      <img src="${url}"
+           onclick="openFullGallery(${JSON.stringify(p.photos)}, ${i})">
+    `;
   }
 }
   photoHtml += '</div>';
