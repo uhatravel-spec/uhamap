@@ -1260,6 +1260,8 @@ try {
 }
     if (requestId !== lastLoadRequestId) return;
 
+    console.log("SERVER DATA:", data);
+    
     window.serverPoints = data.map(p => ({
 
   ...p,
