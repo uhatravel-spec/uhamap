@@ -776,24 +776,11 @@ async function openPointInfo(p){
   
   // Получаем URL фото для показа
   let photoHtml = '<div class="photo-gallery">';
-  if (
-  Array.isArray(p.photos) &&
-  p.photos.length > 0
-) {
-    for (let i = 0; i < p.photos.length; i++) {
-      const blob = await getPhotoBlob(p.photos[i]);
-      if (blob) {
-        const url = URL.createObjectURL(blob);
-        photoHtml += `<img src="${url}" onclick="openFullGallery(${JSON.stringify(p.photos)}, ${i})">`;
-      }
-    }
-  }
 
+// 1. LOCALE BLOB (черновики)
 if (Array.isArray(p.photos) && p.photos.length > 0) {
-
   for (let i = 0; i < p.photos.length; i++) {
     const blob = await getPhotoBlob(p.photos[i]);
-
     if (!blob) continue;
 
     const url = URL.createObjectURL(blob);
@@ -804,7 +791,33 @@ if (Array.isArray(p.photos) && p.photos.length > 0) {
     `;
   }
 }
-  photoHtml += '</div>';
+
+// 2. SERVER URLS (ОПУБЛИКОВАННЫЕ)
+if (p.photo_urls) {
+  let urls = p.photo_urls;
+
+  if (typeof urls === "string") {
+    try {
+      urls = JSON.parse(urls || "[]");
+    } catch {
+      urls = [];
+    }
+  }
+
+  if (Array.isArray(urls)) {
+    urls.forEach((url, i) => {
+      photoHtml += `
+        <img src="${url}"
+             referrerpolicy="no-referrer"
+             loading="lazy"
+             style="background:#eee"
+             onclick='openFullGalleryByUrls(${JSON.stringify(urls)}, ${i})'>
+      `;
+    });
+  }
+}
+
+photoHtml += '</div>';
   
   const statusText = p.status === "approved" ? "🟢 Опубликовано" : 
                      p.status === "pending" ? "🟡 На модерации" : "⚪ Черновик";
