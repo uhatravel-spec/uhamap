@@ -1130,7 +1130,7 @@ for (let id of (point.photos || [])) {
 const res = await fetch(API, {
   method: "POST",
   body: JSON.stringify({
-    action: "uploadPhoto",
+    action: "savePoint",
     data: {
       id: point.id,
       lat: point.lat,
