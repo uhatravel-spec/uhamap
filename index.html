@@ -784,14 +784,38 @@ async function openPointInfo(p){
       }
     }
   } else if (p.photo_urls) {
-    // Для одобренных точек с сервера
-    try {
-      const urls = JSON.parse(p.photo_urls || "[]");
-      urls.forEach((url, i) => {
-        photoHtml += `<img src="${url}" onclick="openFullGalleryByUrls(${JSON.stringify(urls)}, ${i})">`;
-      });
-    } catch(e) {}
+
+  try {
+
+    let urls = p.photo_urls;
+
+    // если пришла строка — парсим
+    if (typeof urls === "string") {
+      urls = JSON.parse(urls || "[]");
+    }
+
+    // если это не массив — делаем пустой
+    if (!Array.isArray(urls)) {
+      urls = [];
+    }
+
+    urls.forEach((url, i) => {
+
+      photoHtml += `
+        <img 
+          src="${url}" 
+          onclick='openFullGalleryByUrls(${JSON.stringify(urls)}, ${i})'
+        >
+      `;
+
+    });
+
+  } catch(e) {
+
+    console.log("PHOTO URL PARSE ERROR", e);
+
   }
+}
   photoHtml += '</div>';
   
   const statusText = p.status === "approved" ? "🟢 Опубликовано" : 
