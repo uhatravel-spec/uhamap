@@ -775,7 +775,10 @@ async function openPointInfo(p){
   
   // Получаем URL фото для показа
   let photoHtml = '<div class="photo-gallery">';
-  if (p.photos && p.photos.length > 0) {
+  if (
+  Array.isArray(p.photos) &&
+  p.photos.length > 0
+) {
     for (let i = 0; i < p.photos.length; i++) {
       const blob = await getPhotoBlob(p.photos[i]);
       if (blob) {
@@ -789,21 +792,23 @@ async function openPointInfo(p){
 
     let urls = p.photo_urls;
 
-    // если пришла строка — парсим
+    // если строка -> parse
     if (typeof urls === "string") {
       urls = JSON.parse(urls || "[]");
     }
 
-    // если это не массив — делаем пустой
+    // защита
     if (!Array.isArray(urls)) {
       urls = [];
     }
 
+    console.log("PHOTO URLS:", urls);
+
     urls.forEach((url, i) => {
 
       photoHtml += `
-        <img 
-          src="${url}" 
+        <img
+          src="${url}"
           onclick='openFullGalleryByUrls(${JSON.stringify(urls)}, ${i})'
         >
       `;
@@ -1254,11 +1259,22 @@ try {
     if (requestId !== lastLoadRequestId) return;
 
     window.serverPoints = data.map(p => ({
-      ...p,
-      user_id: p.user_id || 0,
-      status: p.status || "approved",
-      photo_urls: p.photo_urls || "[]"
-    }));
+
+  ...p,
+
+  // нормализуем описание
+  desc: p.description || p.desc || "",
+
+  // нормализуем фото
+  photo_urls: p.photo_urls || "[]",
+
+  // user
+  user_id: p.user_id || 0,
+
+  // status
+  status: p.status || "approved"
+
+}));
     
     if (requestId !== lastLoadRequestId) return;
     
