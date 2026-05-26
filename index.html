@@ -779,10 +779,10 @@ const PointStore = {
 async function openPointInfo(p){
   publishId = p.id;
   const card = document.getElementById("pointCard");
-  
-  // Получаем URL фото для показа
+
   let photoHtml = '<div class="photo-gallery">';
 
+  // 🔥 БЕЗОПАСНЫЙ РАЗБОР SERVER URLS (ОБЯЗАТЕЛЬНО В НАЧАЛЕ)
   const serverUrls = (() => {
     if (!p.photo_urls) return [];
     if (typeof p.photo_urls === "string") {
@@ -796,7 +796,7 @@ async function openPointInfo(p){
   })();  
 
 // 1. LOCALE BLOB (черновики)
-if (Array.isArray(p.photos) && p.photos.length > 0) {
+if (p.photos && Array.isArray(p.photos) && p.photos.length > 0) {
   for (let i = 0; i < p.photos.length; i++) {
     const blob = await getPhotoBlob(p.photos[i]);
     if (!blob) continue;
@@ -815,7 +815,7 @@ if (Array.isArray(p.photos) && p.photos.length > 0) {
         "
         onload="console.log('IMAGE LOADED')"
         onerror="console.log('IMAGE ERROR')"
-        nclick='openFullGalleryByUrls(${JSON.stringify(p.photos)}, ${i})'
+        onclick='openFullGalleryByUrls(${JSON.stringify(serverUrls)}, ${i})'
       >
     `;
   }
@@ -840,7 +840,7 @@ if (p.photo_urls) {
              referrerpolicy="no-referrer"
              loading="lazy"
              style="background:#ddd"
-             nclick='openFullGalleryByUrls(${JSON.stringify(p.photos)}, ${i})'>
+             onclick='openFullGalleryByUrls(${JSON.stringify(urls)}, ${i})'>
       `;
     });
   }
@@ -885,7 +885,9 @@ photoHtml += '</div>';
 }
 
 function closePointInfo(){
-  document.getElementById("pointCard").classList.add("hidden");
+  const card = document.getElementById("pointCard");
+  card.classList.add("hidden");
+  card.style.display = "none";
 }
 
 function highlightMarker(marker){
