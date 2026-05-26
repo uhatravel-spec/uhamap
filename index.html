@@ -786,8 +786,19 @@ if (Array.isArray(p.photos) && p.photos.length > 0) {
     const url = URL.createObjectURL(blob);
 
     photoHtml += `
-      <img src="${url}"
-           onclick="openFullGallery(${JSON.stringify(p.photos)}, ${i})">
+      <img
+  src="${url}"
+  style="
+    width:200px;
+    height:150px;
+    object-fit:cover;
+    border:5px solid blue;
+    background:yellow;
+  "
+  onload="console.log('IMAGE LOADED')"
+  onerror="console.log('IMAGE ERROR')"
+  onclick='openFullGalleryByUrls(${JSON.stringify(urls)}, ${i})'
+>
     `;
   }
 }
