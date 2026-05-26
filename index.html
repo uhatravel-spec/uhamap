@@ -822,28 +822,16 @@ if (p.photos && Array.isArray(p.photos) && p.photos.length > 0) {
 }
 
 // 2. SERVER URLS (ОПУБЛИКОВАННЫЕ)
-if (p.photo_urls) {
-  let urls = serverUrls;
-
-  if (typeof urls === "string") {
-    try {
-      urls = JSON.parse(urls || "[]");
-    } catch {
-      urls = [];
-    }
-  }
-
-  if (Array.isArray(urls)) {
-    urls.forEach((url, i) => {
-      photoHtml += `
-        <img src="${url}"
-             referrerpolicy="no-referrer"
-             loading="lazy"
-             style="background:#ddd"
-             onclick='openFullGalleryByUrls(${JSON.stringify(urls)}, ${i})'>
-      `;
-    });
-  }
+if (serverUrls.length > 0) {
+  serverUrls.forEach((url, i) => {
+    photoHtml += `
+      <img src="${url}"
+           referrerpolicy="no-referrer"
+           loading="lazy"
+           style="background:#ddd"
+           onclick='openFullGalleryByUrls(${JSON.stringify(serverUrls)}, ${i})'>
+    `;
+  });
 }
 
 photoHtml += '</div>';
@@ -1523,3 +1511,4 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
