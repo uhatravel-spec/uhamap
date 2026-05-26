@@ -237,6 +237,10 @@ select, textarea, button {
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   gap: 10px;
   margin-top: 10px;
+
+  max-height: 40vh;
+  overflow-y: auto;
+  padding-bottom: 10px;
 }
 
 .photo-gallery img {
@@ -247,6 +251,8 @@ select, textarea, button {
   border-radius: 8px;
   cursor: pointer;
   background: #eee;
+
+  min-height: 100px; /* ВАЖНО */
 }
 
 .photo-gallery img:hover {
@@ -777,6 +783,18 @@ async function openPointInfo(p){
   // Получаем URL фото для показа
   let photoHtml = '<div class="photo-gallery">';
 
+  const serverUrls = (() => {
+    if (!p.photo_urls) return [];
+    if (typeof p.photo_urls === "string") {
+      try {
+        return JSON.parse(p.photo_urls || "[]");
+      } catch {
+        return [];
+      }
+    }
+    return Array.isArray(p.photo_urls) ? p.photo_urls : [];
+  })();  
+
 // 1. LOCALE BLOB (черновики)
 if (Array.isArray(p.photos) && p.photos.length > 0) {
   for (let i = 0; i < p.photos.length; i++) {
@@ -797,7 +815,7 @@ if (Array.isArray(p.photos) && p.photos.length > 0) {
         "
         onload="console.log('IMAGE LOADED')"
         onerror="console.log('IMAGE ERROR')"
-        onclick='openFullGalleryByUrls(${JSON.stringify(urls)}, ${i})'
+        nclick='openFullGalleryByUrls(${JSON.stringify(p.photos)}, ${i})'
       >
     `;
   }
@@ -805,7 +823,7 @@ if (Array.isArray(p.photos) && p.photos.length > 0) {
 
 // 2. SERVER URLS (ОПУБЛИКОВАННЫЕ)
 if (p.photo_urls) {
-  let urls = p.photo_urls;
+  let urls = serverUrls;
 
   if (typeof urls === "string") {
     try {
@@ -821,8 +839,8 @@ if (p.photo_urls) {
         <img src="${url}"
              referrerpolicy="no-referrer"
              loading="lazy"
-             style="background:#eee"
-             onclick='openFullGalleryByUrls(${JSON.stringify(urls)}, ${i})'>
+             style="background:#ddd"
+             nclick='openFullGalleryByUrls(${JSON.stringify(p.photos)}, ${i})'>
       `;
     });
   }
@@ -862,6 +880,8 @@ photoHtml += '</div>';
   `;
 
   card.classList.remove("hidden");
+  card.style.display = "block";
+  card.style.transform = "translateY(0)";
 }
 
 function closePointInfo(){
