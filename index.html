@@ -783,42 +783,52 @@ async function openPointInfo(p){
   let photoHtml = '<div class="photo-gallery">';
 
   // 🔥 БЕЗОПАСНЫЙ РАЗБОР SERVER URLS (ОБЯЗАТЕЛЬНО В НАЧАЛЕ)
-  const serverUrls = (() => {
-    if (!p.photo_urls) return [];
-    if (typeof p.photo_urls === "string") {
-      try {
-        return JSON.parse(p.photo_urls || "[]");
-      } catch {
-        return [];
-      }
-    }
-    return Array.isArray(p.photo_urls) ? p.photo_urls : [];
-  })();  
+  const localIds = Array.isArray(p.photos) ? p.photos : [];
+
+const serverUrls = (() => {
+  if (!p.photo_urls) return [];
+  if (typeof p.photo_urls === "string") {
+    try { return JSON.parse(p.photo_urls); } catch { return []; }
+  }
+  if (Array.isArray(p.photo_urls)) return p.photo_urls;
+  return [];
+})(); 
 
 // 1. LOCALE BLOB (черновики)
-if (p.photos && Array.isArray(p.photos) && p.photos.length > 0) {
-  for (let i = 0; i < p.photos.length; i++) {
-    const blob = await getPhotoBlob(p.photos[i]);
-    if (!blob) continue;
+const allPhotos = [];
 
-    const url = URL.createObjectURL(blob);
+// LOCAL PHOTOS
+for (let i = 0; i < localIds.length; i++) {
+  const blob = await getPhotoBlob(localIds[i]);
+  if (!blob) continue;
 
-    photoHtml += `
-      <img
-        src="${url}"
-        style="
-          width:200px;
-          height:150px;
-          object-fit:cover;
-          border:5px solid blue;
-          background:yellow;
-        "
-        onload="console.log('IMAGE LOADED')"
-        onerror="console.log('IMAGE ERROR')"
-        onclick='openFullGalleryByUrls(${JSON.stringify(serverUrls)}, ${i})'
-      >
-    `;
-  }
+  const url = URL.createObjectURL(blob);
+
+  allPhotos.push({
+    url,
+    index: i
+  });
+}
+
+// SERVER PHOTOS
+serverUrls.forEach((url, i) => {
+  allPhotos.push({
+    url,
+    index: i
+  });
+});
+
+// RENDER
+for (let i = 0; i < allPhotos.length; i++) {
+  const ph = allPhotos[i];
+
+  photoHtml += `
+    <img
+      src="${ph.url}"
+      style="width:200px;height:150px;object-fit:cover;"
+      onclick='openUnifiedGallery(${JSON.stringify(allPhotos)}, ${i})'
+    >
+  `;
 }
 
 // 2. SERVER URLS (ОПУБЛИКОВАННЫЕ)
@@ -1486,6 +1496,65 @@ function closeGallery(){
   galleryUrls = [];
 }
 
+function openUnifiedGallery(items, index = 0){
+  galleryIndex = index;
+
+  if (galleryOverlay) {
+    galleryOverlay.remove();
+    galleryOverlay = null;
+  }
+
+  galleryUrls = items.map(x => x.url);
+
+  galleryOverlay = document.createElement("div");
+  galleryOverlay.className = "gallery-overlay";
+
+  const img = document.createElement("img");
+  img.className = "gallery-image";
+
+  const render = () => {
+    img.src = galleryUrls[galleryIndex];
+  };
+
+  render();
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "✕";
+  closeBtn.className = "gallery-close";
+  closeBtn.onclick = closeGallery;
+
+  const prevBtn = document.createElement("button");
+  prevBtn.textContent = "◀";
+  prevBtn.className = "gallery-btn";
+  prevBtn.onclick = () => {
+    if (galleryIndex > 0) {
+      galleryIndex--;
+      render();
+    }
+  };
+
+  const nextBtn = document.createElement("button");
+  nextBtn.textContent = "▶";
+  nextBtn.className = "gallery-btn";
+  nextBtn.onclick = () => {
+    if (galleryIndex < galleryUrls.length - 1) {
+      galleryIndex++;
+      render();
+    }
+  };
+
+  const controls = document.createElement("div");
+  controls.className = "gallery-controls";
+  controls.appendChild(prevBtn);
+  controls.appendChild(nextBtn);
+
+  galleryOverlay.appendChild(closeBtn);
+  galleryOverlay.appendChild(img);
+  galleryOverlay.appendChild(controls);
+
+  document.body.appendChild(galleryOverlay);
+}
+
 // Обработка клавиатуры
 document.addEventListener("touchstart", e => {
   if(!e.target.closest("textarea")){
@@ -1511,4 +1580,3 @@ window.onload = () => {
 </script>
 </body>
 </html>
-
